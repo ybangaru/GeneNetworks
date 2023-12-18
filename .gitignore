@@ -1,0 +1,25 @@
+data/
+iframe_figures/
+logs/
+mlruns/
+assets/
+
+# failed experiments
+
+panel_app.py
+pipeline_clustering1.py
+styles.css
+
+vizgen_mouse_stst_raw_data.py
+data_changes.py
+
+dashboard_test.py
+streamlit_config.yaml
+test_github_copilot.py
+
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+.vscode/
+.virtual_documents
+.lsp_symlink
