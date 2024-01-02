@@ -37,9 +37,9 @@ def train_node_classification(dataset_kwargs):
     # data_iter = SubgraphSampler(dataset)
     # batch = next(data_iter)
 
-    # # i = 0
-    # # j = 1234
-    # # dataset.plot_subgraph(i, j)
+    # i = 0
+    # j = 1234
+    # dataset.plot_subgraph(i, j)
 
 
 
@@ -86,7 +86,7 @@ def train_node_classification(dataset_kwargs):
 
     train_kwargs = {
         'experiment_name' : f'{dataset_kwargs["network_type"]}',
-        'run_name' : f'{dataset_kwargs["graph_type"]}-emb_dim={model_kwargs["emb_dim"]}-lr={learning_rate}-batch_size={BATCH_SIZE}-features={NODE_FEATURES_string}',
+        'run_name' : f'{dataset_kwargs["graph_type"]}-emb_dim={model_kwargs["emb_dim"]}-subgraph_size={dataset_kwargs["subgraph_size"]}-subgraph_radius={dataset_kwargs["subgraph_radius_limit"]}-neighborhood_size={dataset_kwargs["neighborhood_size"]}',
         'batch_size': BATCH_SIZE, # No of subgraphs per batch 
         'lr': learning_rate,
         'graph_loss_weight': 1.0,  # Weight of graph task loss relative to node task loss
@@ -158,13 +158,15 @@ def build_train_kwargs(data_filter_name, resolution, network_type, graph_type):
     # TODO: Add a function to create/read the build biomarkers_list before creating the pytorch graph datasets
     # Change raw_folder_name and processed_folder_name to conduct different experiments
 
+    # TODO: subgraphs not using SUBGRAPH_RADIUS_LIMIT while plotting
+
     # dataset_root = "/data/qd452774/spatial_transcriptomics/data/example_dataset"
 
     dataset_root = f"/data/qd452774/spatial_transcriptomics/data/{data_filter_name}_leiden_res_{resolution}"
 
-    SUBGRAPH_RADIUS_LIMIT = SLICE_PIXELS_EDGE_CUTOFF['Liver1Slice1'] * 4
-    SUBGRAPH_SIZE = 3
-    NEIGHBORHOOD_SIZE = 15  # SUBGRAPH_SIZE * 5
+    SUBGRAPH_SIZE = 9
+    NEIGHBORHOOD_SIZE = SUBGRAPH_SIZE**3
+    SUBGRAPH_RADIUS_LIMIT = SLICE_PIXELS_EDGE_CUTOFF['Liver1Slice1'] * SUBGRAPH_SIZE
     NODE_EMBEDDING_SIZE = 128
 
     biomarkers_list = pd.read_csv(os.path.join(dataset_root, "biomarkers_list.csv"), header=None).values.flatten().tolist()
