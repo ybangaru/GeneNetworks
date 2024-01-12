@@ -102,10 +102,16 @@ network_features_config = {
 def parallel_function(segment_config, pretransform_networkx_config, network_features_config):
     try:
         curr_nx_graph = pipeline_instance.build_networkx_for_region(segment_config, pretransform_networkx_config, network_features_config)
-        pipeline_instance.build_networkx_plots(curr_nx_graph, segment_config, pretransform_networkx_config, save_=True)
+        if curr_nx_graph:
+            pipeline_instance.build_networkx_plots(curr_nx_graph, segment_config, pretransform_networkx_config, save_=True)
+        else:
+            logger.info("No cells in segment")
+            logger.info(f"{segment_config['sample_name']} - x={segment_config['region_id'][0]} - y={segment_config['region_id'][1]}")
+            logger.info("")
     except Exception as e:
         logger.info("------------------")
-        logger.info(segment_config.values())
+        logger.info(f"{segment_config['sample_name']} - x={segment_config['region_id'][0]} - y={segment_config['region_id'][1]}")
+        logger.info(pretransform_networkx_config)
         logger.error(f"{str(e)}")
 
 def main():
@@ -116,8 +122,8 @@ def main():
 
     # Create a multiprocessing Pool and execute the function in parallel
     with multiprocessing.Pool(processes=NO_JOBS) as pool:
-        pool.starmap(parallel_function, func_args)
-        
+        pool.starmap(parallel_function, func_args) 
+
 
 if __name__=="__main__":
     main()
