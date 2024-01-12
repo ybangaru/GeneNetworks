@@ -5,20 +5,10 @@ and save them in the form of pickle files. These pickle files are then used for 
 """
 import warnings
 warnings.filterwarnings("ignore")
-import os
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import pickle
-from helpers import logger, NO_JOBS
-from joblib import Parallel, delayed
-import multiprocessing
-# import torch.nn as nn
 
-from helpers import spatialPipeline, ANNOTATION_DICT, plotly_spatial_scatter_edges, plotly_spatial_scatter_categorical
-from helpers import build_graph_from_cell_coords, assign_attributes, calcualte_voronoi_from_coords, plot_voronoi_polygons, plot_graph
-from helpers import BoundaryDataLoader, SLICE_PIXELS_EDGE_CUTOFF, logger
-import matplotlib.pyplot as plt
+from helpers import logger, NO_JOBS
+import multiprocessing
+from helpers import spatialPipeline, logger, ANNOTATION_DICT, SLICE_PIXELS_EDGE_CUTOFF
 
 all_liver_samples = ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"]
 data_filter_name = "Liver12Slice12"
@@ -75,6 +65,14 @@ pretransform_networkx_configs = [
             "threshold_distance" : 0,
         },    
         "neighbor_edge_cutoff" : SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"],
+    },     
+    {
+        "boundary_type" : "given",
+        "edge_config" : {
+            "type" : "MST",
+            "bound_type" : "",
+        },    
+        "neighbor_edge_cutoff" : SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"],
     },                
 
 ]
@@ -122,7 +120,7 @@ def main():
 
     # Create a multiprocessing Pool and execute the function in parallel
     with multiprocessing.Pool(processes=NO_JOBS) as pool:
-        pool.starmap(parallel_function, func_args) 
+        pool.starmap(parallel_function, func_args)
 
 
 if __name__=="__main__":
