@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import warnings
 from scipy.spatial import Delaunay
+from scipy.spatial.distance import cdist
 from shapely.geometry import Polygon, Point
 import geopandas as gpd
 from rtree import index
@@ -324,6 +325,23 @@ def build_graph_from_cell_coords(cell_data, cell_boundaries, boundary_augments, 
             for idx in candidate_indices:
                 if idx != i:
                     G.add_edge(i, idx)
+
+    elif edge_logic == "MST":
+        # Calculate all pairwise distances
+        distances = cdist(coord_ar[:, 1:3].astype(float), coord_ar[:, 1:3].astype(float))
+
+        # Create a complete graph
+        for i, row in enumerate(coord_ar):
+            G.add_node(i, **{boundary_augments:cell_boundaries[i]})
+            node_to_cell_mapping[i] = row[0]
+
+        # Add edges with weights
+        for i in range(len(coord_ar)):
+            for j in range(i+1, len(coord_ar)):
+                G.add_edge(i, j, weight=distances[i, j])
+
+        # Compute the minimum spanning tree
+        G = nx.minimum_spanning_tree(G)
 
     return G, node_to_cell_mapping
 
