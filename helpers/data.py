@@ -25,9 +25,9 @@ from torch_geometric.utils import subgraph
 from joblib.externals.loky.backend.context import get_context
 
 
-from spacegm.graph_build import plot_graph
-from spacegm.features import get_feature_names, nx_to_tg_graph
-from spacegm.utils import (
+from .graph_build import plot_graph
+from .features import get_feature_names, nx_to_tg_graph
+from .utils import (
     EDGE_TYPES,
     get_cell_type_metadata,
     get_biomarker_metadata,
@@ -640,7 +640,7 @@ if __name__ == '__main__':
         'pre_transform': None,
         'raw_folder_name': 'graph',
         'processed_folder_name': 'tg_graph',
-        'node_features': ["cell_type", "SIZE", "biomarker_expression", "neighborhood_composition", "center_coord"],
+        'node_features': ["cell_type", "volume", "biomarker_expression", "neighborhood_composition", "center_coord"],
         'edge_features': ["edge_type", "distance"],
         'subgraph_size': 3,
         'subgraph_source': 'on-the-fly',

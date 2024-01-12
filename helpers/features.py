@@ -13,7 +13,7 @@ import warnings
 import torch
 import torch_geometric as tg
 
-from spacegm.utils import EDGE_TYPES
+from .utils import EDGE_TYPES
 from helpers import logger, extract_boundary_features
 
 
@@ -201,7 +201,7 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
             v = [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
             return v        
         elif feature_item in G.nodes[node_ind]:
-            # Additional features specified by users, e.g. "SIZE" in the example
+            # Additional features specified by users, e.g. "volume" in the example
             v = [G.nodes[node_ind][feature_item]]
             return v
         else:

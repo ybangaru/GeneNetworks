@@ -1,6 +1,6 @@
 
-from spacegm import CellularGraphDataset
-from helpers.pipeline_clustering_graph_plotly import *
+from helpers import CellularGraphDataset
+from helpers.plotly_helpers import *
 from helpers import logger
 
 def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edges=None):
@@ -128,7 +128,7 @@ if __name__ == "__main__":
         'pre_transform': None,
         'raw_folder_name': 'graph',  # os.path.join(dataset_root, "graph") is the folder where we saved nx graphs
         'processed_folder_name': 'tg_graph',  # processed dataset files will be stored here
-        'node_features': ["cell_type", "SIZE", "biomarker_expression", "neighborhood_composition", "center_coord"],  # There are all the cellular features that we want the dataset to compute
+        'node_features': ["cell_type", "volume", "biomarker_expression", "neighborhood_composition", "center_coord"],  # There are all the cellular features that we want the dataset to compute
         'edge_features': ["edge_type", "distance"],  # edge (cell pair) features
         'subgraph_size': 3,  # indicating we want to sample 3-hop subgraphs from these regions (for training/inference), this is a core parameter for SPACE-GM.
         'subgraph_source': 'on-the-fly',

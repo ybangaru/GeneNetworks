@@ -690,19 +690,26 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
     # Create edges for Plotly Scatter plot
     edge_x = []
     edge_y = []
+    edge_colors = []
+    edge_dashes = []    
     for i, j, edge_type in G.edges.data():
         xi, yi = G.nodes[i]["center_coord"]
         xj, yj = G.nodes[j]["center_coord"]
+
         if edge_type["edge_type"] == "neighbor":
             edge_x.extend(
                 [xi, xj, None]
             )  # Add None to create a break in the line
             edge_y.extend([yi, yj, None])
+            edge_colors.append("brown")
+            edge_dashes.append("solid")
         else:
             edge_x.extend(
                 [xi, xj, None]
             )  # Add None to create a break in the line
             edge_y.extend([yi, yj, None])
+            edge_colors.append("gold")
+            edge_dashes.append("dash")
 
     # Create a dictionary to store node traces for each cell type
     node_traces = {}
@@ -715,7 +722,7 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
             y=node_coords[mask, 1],
             mode="markers",
             marker=dict(
-                size=8, color=color_dict[cell_type], line=dict(width=0.5, color="black")
+                size=8, color=color_dict[cell_type], line=dict(width=0.5, color=color_dict[cell_type])
             ),
             #text=[name for i, name in enumerate(node_names) if mask[i]],
             #hoverinfo="text",
@@ -724,12 +731,15 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
         node_traces[cell_type] = cell_node_trace
 
 
+    # ind_neighbors = np.where(np.array(edge_colors) == "brown")[0]
+    # ind_distinct = np.where(np.array(edge_colors) == "gold")[0]
+
     # Create scatter plot for edges (lines)
     edge_trace = go.Scatter(
         x=edge_x,
         y=edge_y,
         mode="lines",
-        line=dict(width=0.8, color="wheat"),
+        line=dict(width=0.8, color="wheat"), #edge_colors, dash=edge_dashes
         hoverinfo="none",
         name="Edges",
         showlegend=True,

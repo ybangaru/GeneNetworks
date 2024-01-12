@@ -14,7 +14,7 @@ from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from torch_geometric.data import Batch
 
-from spacegm.data import SubgraphSampler
+from .data import SubgraphSampler
 
 
 def get_random_sampled_subgraphs(dataset,

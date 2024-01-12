@@ -6,6 +6,7 @@ Created on Sat Jul 24 20:12:57 2021
 @author: zqwu
 """
 import os
+import math
 import numpy as np
 import pandas as pd
 import json
@@ -16,10 +17,10 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import warnings
 from scipy.spatial import Delaunay
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, Point
 import geopandas as gpd
 from rtree import index
-
+from shapely.geometry import Polygon, LineString
 
 RADIUS_RELAXATION = 0.1
 NEIGHBOR_EDGE_CUTOFF = 55  # distance cutoff for neighbor edges, 55 pixels~20 um
@@ -257,33 +258,27 @@ def calcualte_voronoi_from_coords(x, y, xmax=None, ymax=None, xmin=None, ymin=No
     return voronoi_polygons
 
 
-def build_graph_from_cell_coords(cell_data, cell_boundaries, edge_logic='Delaunay'):
+def build_graph_from_cell_coords(cell_data, cell_boundaries, boundary_augments, edge_config):
     """Construct a networkx graph based on cell coordinates
 
     Args:
-        cell_data (pd.DataFrame): dataframe containing cell data,
-            columns ['CELL_ID', 'X', 'Y', ...]
-        cell_boundaries (list): list of boundaries of voronoi,
+        cell_data: annData object containing all samples chosen
+        cell_boundaries (list): list of boundaries of cells,
             represented by the coordinates of their exterior vertices
 
     Returns:
         G (nx.Graph): full cellular graph of the region
     """
-    save_polygon = True
-    if not len(cell_data) == len(cell_boundaries):
-        warnings.warn("Number of cells does not match number of voronoi polygons")
-        save_polygon = False
+
+    edge_logic = edge_config["type"]
 
     coord_ar = np.array(cell_data[['CELL_ID', 'X', 'Y']])
     G = nx.Graph()
     node_to_cell_mapping = {}
-    # for i, row in enumerate(coord_ar):
-    #     G.add_node(i, voronoi_polygon=cell_boundaries[i])
-    #     node_to_cell_mapping[i] = row[0]
 
     if edge_logic == 'Delaunay':
         for i, row in enumerate(coord_ar):
-            G.add_node(i, voronoi_polygon=cell_boundaries[i])
+            G.add_node(i, **{boundary_augments:cell_boundaries[i]})
             node_to_cell_mapping[i] = row[0]
         
         dln = Delaunay(coord_ar[:, 1:3])
@@ -312,20 +307,19 @@ def build_graph_from_cell_coords(cell_data, cell_boundaries, edge_logic='Delauna
         # for i, row in enumerate(gdf):
         for i, cell in gdf.iterrows():
             # Create a rectangle polygon from the bounds
-            # temp_bounds = list(cell.geometry.bounds)
-            temp_bounds = np.array(list(cell.geometry.minimum_rotated_rectangle.exterior.coords))
-            # rectangle = [[temp_bounds[0], temp_bounds[1]], [temp_bounds[0], temp_bounds[3]], [temp_bounds[2], temp_bounds[3]], [temp_bounds[2], temp_bounds[1]]]
-            # transformed_rectangle = np.array(rectangle)
-            G.add_node(i, voronoi_polygon=temp_bounds)
+            if edge_config["bound_type"] == "rectangle":
+                temp_bounds = list(cell.geometry.bounds)
+                rectangle = [[temp_bounds[0], temp_bounds[1]], [temp_bounds[0], temp_bounds[3]], [temp_bounds[2], temp_bounds[3]], [temp_bounds[2], temp_bounds[1]]]
+                transformed_rectangle = np.array(rectangle)
+            elif edge_config["bound_type"] == "rotated_rectangle":
+                transformed_rectangle = np.array(list(cell.geometry.minimum_rotated_rectangle.exterior.coords))
+
+            G.add_node(i, **{boundary_augments:cell_boundaries[i]}, **{edge_config["bound_type"]:transformed_rectangle})
             node_to_cell_mapping[i] = cell['CELL_ID']
 
         # Iterate through cells and find nearby candidates using the spatial index
-        threshold_distance = 0
+        threshold_distance = edge_config["threshold_distance"]
         for i, cell in gdf.iterrows():
-            # exterior_coords = cell.geometry.exterior.coords
-            # intersection = cell.geometry.intersection(candidate_cell.geometry)
-            # shared_boundary_length = cell.geometry.boundary.intersection(candidate_cell.geometry.boundary).length
-            # shared_area = intersection.area
             candidate_indices = list(spatial_index.intersection(cell.geometry.buffer(threshold_distance).bounds))
             for idx in candidate_indices:
                 if idx != i:
@@ -430,7 +424,52 @@ def build_voronoi_polygon_to_cell_mapping(G, voronoi_polygons, cell_data):
     return voronoi_polygon_to_cell_mapping
 
 
-def assign_attributes(G, cell_data, node_to_cell_mapping, neighbor_edge_cutoff=NEIGHBOR_EDGE_CUTOFF):
+def calculate_sbr_orientation(boundary_polygon):
+    # Get the minimum rotated rectangle (SBR)
+    sbr = boundary_polygon.minimum_rotated_rectangle
+    
+    # Get coordinates of SBR vertices
+    x, y = sbr.exterior.coords.xy
+
+    # Calculate the differences between x and y coordinates of two consecutive vertices
+    dx = x[1] - x[0]
+    dy = y[1] - y[0]
+
+    # Calculate the orientation (angle) of the SBR
+    sbr_orientation = math.degrees(math.atan2(dy, dx)) % 180
+
+    return sbr_orientation
+
+
+def calculate_most_frequent_wall_orientation(boundary_polygon, tolerance):
+    # Get the exterior of the polygon
+    exterior = boundary_polygon.exterior
+    
+    # Get the coordinates of the exterior
+    coords = list(exterior.coords)
+    
+    # Calculate the orientations of the walls
+    wall_orientations = []
+    for i in range(len(coords) - 1):
+        dx = coords[i+1][0] - coords[i][0]
+        dy = coords[i+1][1] - coords[i][1]
+        angle = math.degrees(math.atan2(dy, dx)) % 180
+        wall_orientations.append(angle)
+    
+    # Create a histogram with a bin size based on the tolerance
+    bins = np.arange(0, 180, tolerance)
+    hist, bin_edges = np.histogram(wall_orientations, bins=bins)
+    
+    # Find the bin with the maximum count
+    max_bin_index = np.argmax(hist)
+    
+    # Calculate the orientation corresponding to the maximum bin
+    most_frequent_orientation = (bin_edges[max_bin_index] + bin_edges[max_bin_index + 1]) / 2
+    
+    return most_frequent_orientation
+
+
+def assign_attributes(G, cell_data, cell_boundaries, node_to_cell_mapping, neighbor_edge_cutoff=NEIGHBOR_EDGE_CUTOFF, padding_dict=None):
     """Assign node and edge attributes to the cellular graph
 
     Args:
@@ -457,6 +496,9 @@ def assign_attributes(G, cell_data, node_to_cell_mapping, neighbor_edge_cutoff=N
         node_index = cell_to_node_mapping[cell_id]
         p = {"cell_id": cell_id}
         p["center_coord"] = (cell_row['X'], cell_row['Y'])
+
+        if padding_dict:
+            p["is_padding"] = padding_dict[cell_id]
         if "CELL_TYPE" in cell_row:
             p["cell_type"] = cell_row["CELL_TYPE"]
         else:
@@ -465,6 +507,40 @@ def assign_attributes(G, cell_data, node_to_cell_mapping, neighbor_edge_cutoff=N
         p["biomarker_expression"] = biomarker_expression_dict
         for feat_name in additional_features:
             p[feat_name] = cell_row[feat_name]
+        p["boundary_polygon"] = cell_boundaries[p['cell_id']][0]
+        boundary_polygon = Polygon(p["boundary_polygon"])
+        # Calculating Size (using the bounding box diagonal)
+        # p["poly_diag_size"] = np.linalg.norm(boundary_polygon.bounds[2:] - boundary_polygon.bounds[:2])        
+        # Calculating Perimeter
+        p["perimeter"] = boundary_polygon.length
+        # Calculating Area
+        p["area"] = boundary_polygon.area
+        # Calculating Mean radius
+        # TODO: understand centroid variation given vs generated
+        # centroid = boundary_polygon.centroid
+        p["mean_radius"] = np.mean([Point(p["center_coord"]).distance(Point(vertex)) for vertex in boundary_polygon.exterior.coords])
+        # Calculate the Compactness/Circularity
+        p["compactness_circularity"] = 4 * np.pi * boundary_polygon.area / boundary_polygon.length ** 2
+        # Calculate the Fractality
+        p["fractality"] = np.log(boundary_polygon.area) / np.log(boundary_polygon.length)
+        # Calculate the Concavity (Area ratio of the building to its convex hull)
+        p["concavity"] = boundary_polygon.area / boundary_polygon.convex_hull.area
+        # Calculate the Elongation (Length-width ratio of the building SBR)
+        width = boundary_polygon.minimum_rotated_rectangle.bounds[2] - boundary_polygon.minimum_rotated_rectangle.bounds[0]
+        p["elongation"] = boundary_polygon.minimum_rotated_rectangle.length / width
+        # Get the area of the building
+        building_area = boundary_polygon.area
+        # Calculate the radius of an equal-area circle
+        equal_area_circle_radius = np.sqrt(building_area / np.pi)
+        # Create a circle with the same area as the building
+        equal_area_circle = Point(p["center_coord"]).buffer(equal_area_circle_radius)
+        # Calculate the Overlap Index (Area ratio of the intersection and union between the building and its equal area circle)
+        p["overlap_index"] = boundary_polygon.intersection(equal_area_circle).area / boundary_polygon.union(equal_area_circle).area
+        # SBR Orientation
+        p["sbro_orientation"] = calculate_sbr_orientation(boundary_polygon)
+        # most frequent wall orientation
+        p["wswo_orientation"] = calculate_most_frequent_wall_orientation(boundary_polygon, 10)
+                
         node_properties[node_index] = p
 
     nx.set_node_attributes(G, node_properties)
@@ -475,13 +551,14 @@ def assign_attributes(G, cell_data, node_to_cell_mapping, neighbor_edge_cutoff=N
     return G
 
 
-def get_edge_type(G, neighbor_edge_cutoff=NEIGHBOR_EDGE_CUTOFF):
+def get_edge_type(G, neighbor_edge_cutoff):
     """Define neighbor vs distant edges based on distance
 
     Args:
         G (nx.Graph): full cellular graph of the region
         neighbor_edge_cutoff (float): distance cutoff for neighbor edges.
-            By default we use 55 pixels (~20 um)
+        # TODO: no more defaults
+            # By default we use 55 pixels (~20 um)
 
     Returns:
         dict: edge properties
