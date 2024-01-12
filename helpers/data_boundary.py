@@ -91,6 +91,9 @@ class BoundaryDataLoader:
 
         # filtered_ann_data = self.data[mask_combined].obs.index
         fov_values_filtered = list(set(data[mask_combined].obs["fov"]))
+        if not fov_values_filtered:
+            return {}
+            
         boundaries_filtered_fovs_dict = self.get_boundaries_of_multiple_fov(
             data,
             fov_values_filtered

@@ -1,3 +1,5 @@
+import os
+import pickle
 import networkx as nx
 import pandas as pd
 import numpy as np
@@ -8,6 +10,7 @@ from scipy.spatial import Delaunay
 from shapely.geometry import Polygon
 import geopandas as gpd
 from rtree import index
+import plotly.io as pio
 
 from .mlflow_client_ import read_run_result_ann_data
 from .data_boundary import BoundaryDataLoader
@@ -126,6 +129,8 @@ class spatialPipeline:
     def build_networkx_for_region(self, segment_config, pretransform_networkx_config, network_features_config):
 
         segment_boundaries_given = self.read_boundary_arrays(segment_config)
+        if not segment_boundaries_given:
+            return None
         segment_data, segment_centroids = self._get_cell_centroids_df(segment_boundaries_given)
         segment_boundaries = [
             segment_boundaries_given[item][0] for item in segment_data["CELL_ID"].values
@@ -174,7 +179,7 @@ class spatialPipeline:
 
         return G_segment
 
-    def build_networkx_plots(self, G_segment, pretransform_networkx_config, save_=False, cat_column = "cell_type"):
+    def build_networkx_plots(self, G_segment, segment_config, pretransform_networkx_config, save_=False, cat_column = "cell_type"):
 
         plots_ = {}        
         if pretransform_networkx_config["edge_config"]["type"] == "Delaunay":
@@ -182,25 +187,45 @@ class spatialPipeline:
             if pretransform_networkx_config["boundary_type"] == "voronoi":
                 voronoi_boundaries = {G_segment.nodes[n]['cell_id'] : G_segment.nodes[n]["voronoi_polygon"] for n in G_segment.nodes}
                 vor_bound_fig = plotly_spatial_scatter_categorical(voronoi_boundaries, self.data.obs[cat_column])
-                plots_["voronoi_fig.html"] = vor_bound_fig
+                plots_["boundary_voronoi"] = vor_bound_fig
             given_bound_fig = plotly_spatial_scatter_categorical(given_boundaries, self.data.obs[cat_column])
-            plots_["boundary_given_fig.html"] = given_bound_fig
+            plots_["boundary_given_fig"] = given_bound_fig
         
         if pretransform_networkx_config["edge_config"]["type"] == "R3Index":
             if pretransform_networkx_config["edge_config"]["bound_type"] == "rectangle":
                 rec_boundaries = {G_segment.nodes[n]['cell_id'] : G_segment.nodes[n]["rectangle"] for n in G_segment.nodes}
                 boundary_box_fig = plotly_spatial_scatter_categorical(rec_boundaries, self.data.obs[cat_column])            
-                plots_["boundary_box_fig.html"] = boundary_box_fig
+                plots_["boundary_box"] = boundary_box_fig
             if pretransform_networkx_config["edge_config"]["bound_type"] == "rotated_rectangle":
                 rot_rec_boundaries = {G_segment.nodes[n]['cell_id'] : G_segment.nodes[n]["rotated_rectangle"] for n in G_segment.nodes}
                 boundary_box_rotated_fig = plotly_spatial_scatter_categorical(rot_rec_boundaries, self.data.obs[cat_column])
-                plots_["boundary_box_rotated_fig.html"] = boundary_box_rotated_fig
+                plots_["boundary_box_rotated"] = boundary_box_rotated_fig
 
-        plots_[pretransform_networkx_config["edge_config"]["type"]] = plotly_spatial_scatter_edges(G_segment, self.data.obs[cat_column], edge_info=pretransform_networkx_config["edge_config"]["type"])
+        plots_[f'edge_{str.lower(pretransform_networkx_config["edge_config"]["type"])}_{pretransform_networkx_config["edge_config"]["bound_type"]}'] = plotly_spatial_scatter_edges(G_segment, self.data.obs[cat_column], edge_info=pretransform_networkx_config["edge_config"]["type"])
 
         if save_:
+            dataset_root = f"/data/qd452774/spatial_transcriptomics/data/Liver12Slice12_leiden_res_0.7"
+            boundary_name = str.lower(pretransform_networkx_config["boundary_type"])
+            edge_name = str.lower(pretransform_networkx_config["edge_config"]["type"])
+            no_segments_ = segment_config['segments_per_dimension']
+            nx_graph_root = os.path.join(dataset_root, f"graph/{boundary_name}_{edge_name}_{no_segments_}")
+            os.makedirs(nx_graph_root, exist_ok=True)
+
+            nx_graph_name = os.path.join(nx_graph_root, f"{segment_config['sample_name']}_{segment_config['region_id'][0]}_{segment_config['region_id'][1]}.gpkl")
+            with open(nx_graph_name, 'wb') as f:
+                pickle.dump(G_segment, f)
+
+            fig_save_root = os.path.join(dataset_root, f"fig/{boundary_name}_{edge_name}_{no_segments_}")
+            os.makedirs(fig_save_root, exist_ok=True)
+
+            nx_fig_name = os.path.join(fig_save_root, f"{segment_config['sample_name']}_{segment_config['region_id'][0]}_{segment_config['region_id'][1]}")
             for key, val in plots_.items():
-                val.write_html(f"{self.dir_location}/{key}")
+                val.write_html(f"{nx_fig_name}_{key}.html")
+                width_height = 1200
+                pio.write_image(val, f"{nx_fig_name}_{key}.png", width=width_height, height=width_height)
+
+        # return plots_
+
 
 
     def _assign_network_attributes(self, G, node_features, edge_features, **kwargs):
