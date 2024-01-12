@@ -8,14 +8,14 @@
 #SBATCH --account=qd452774
 #SBATCH --job-name=qd452774-python-code
 #SBATCH --output=logs/python-code-%J.log
-#SBATCH --nodelist=compute-node004
+#SBATCH --nodelist=compute-node001
 
 echo "------------------------------------------------------------"
 echo "SLURM JOB ID: $SLURM_JOBID"
 echo "Running on nodes: $SLURM_NODELIST"
 echo "------------------------------------------------------------"
 
-cd /data/qd452774/
+cd /data/qd452774/spatial_transcriptomics
 export CONDA_ROOT=/data/qd452774/miniconda3
 source $CONDA_ROOT/etc/profile.d/conda.sh
 export PATH="$CONDA_ROOT/bin:$PATH"
