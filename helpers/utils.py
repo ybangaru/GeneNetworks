@@ -16,53 +16,6 @@ EDGE_TYPES = {
     "self": 2,
 }
 
-# # Metadata for the example dataset
-# BIOMARKERS_UPMC = [
-#     "CD11b", "CD14", "CD15", "CD163", "CD20", "CD21", "CD31", "CD34", "CD3e",
-#     "CD4", "CD45", "CD45RA", "CD45RO", "CD68", "CD8", "CollagenIV", "HLA-DR",
-#     "Ki67", "PanCK", "Podoplanin", "Vimentin", "aSMA",
-# ]
-
-# CELL_TYPE_MAPPING_UPMC = {
-#     'APC': 0,
-#     'B cell': 1,
-#     'CD4 T cell': 2,
-#     'CD8 T cell': 3,
-#     'Granulocyte': 4,
-#     'Lymph vessel': 5,
-#     'Macrophage': 6,
-#     'Naive immune cell': 7,
-#     'Stromal / Fibroblast': 8,
-#     'Tumor': 9,
-#     'Tumor (CD15+)': 10,
-#     'Tumor (CD20+)': 11,
-#     'Tumor (CD21+)': 12,
-#     'Tumor (Ki67+)': 13,
-#     'Tumor (Podo+)': 14,
-#     'Vessel': 15,
-#     'Unassigned': 16,
-# }
-
-# CELL_TYPE_FREQ_UPMC = {
-#     'APC': 0.038220815854819415,
-#     'B cell': 0.06635091324932002,
-#     'CD4 T cell': 0.09489001514723677,
-#     'CD8 T cell': 0.07824503590797544,
-#     'Granulocyte': 0.026886102677111563,
-#     'Lymph vessel': 0.006429085023448621,
-#     'Macrophage': 0.10251942892685563,
-#     'Naive immune cell': 0.033537398925429215,
-#     'Stromal / Fibroblast': 0.07692583870182068,
-#     'Tumor': 0.10921293560435145,
-#     'Tumor (CD15+)': 0.06106975782857908,
-#     'Tumor (CD20+)': 0.02098925720318548,
-#     'Tumor (CD21+)': 0.053892044158901406,
-#     'Tumor (Ki67+)': 0.13373768013421947,
-#     'Tumor (Podo+)': 0.06276108605978743,
-#     'Vessel': 0.034332604596958326,
-#     'Unassigned': 0.001,
-# }
-
 
 def get_cell_type_metadata(nx_graph_files):
     """Find all unique cell types from a list of cellular graphs
@@ -77,7 +30,7 @@ def get_cell_type_metadata(nx_graph_files):
     if isinstance(nx_graph_files, str):
         nx_graph_files = [nx_graph_files]
 
-    directory_path = os.path.dirname(nx_graph_files[0])
+    directory_path = os.path.dirname(os.path.dirname(nx_graph_files[0]))
     cell_type_mapping_path = os.path.join(directory_path, 'cell_type_mapping.json')
     cell_type_freq_path = os.path.join(directory_path, 'cell_type_freq.json')
     cell_annotation_frequencies_path = os.path.join(directory_path,'cell_annotation_freq.json')

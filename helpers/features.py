@@ -102,7 +102,7 @@ def process_neighbor_composition(G,
 
     comp_vec = np.zeros((len(cell_type_mapping),))
     for n in closest_neighbors:
-        cell_type = cell_type_mapping[G.nodes[n]["cell_type"]]
+        cell_type = cell_type_mapping[kwargs["annotation_cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
         comp_vec[cell_type] += 1
     comp_vec = list(comp_vec / comp_vec.sum())
     return comp_vec
@@ -176,7 +176,8 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
             # Integer index of the cell type
             assert "cell_type_mapping" in feature_kwargs, \
                 "'cell_type_mapping' is required in the kwargs for feature item 'cell_type'"
-            v = [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
+            v = [feature_kwargs["cell_type_mapping"][feature_kwargs["annotation_cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]]
+            # [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
             return v
         elif feature_item == "center_coord":
             # Coordinates of the cell centroid
@@ -194,8 +195,8 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
                 "'cell_type_mapping' is required in the kwargs for feature item 'neighborhood_composition'"
             v = process_neighbor_composition(G, node_ind, **feature_kwargs)
             return v
-        elif feature_item == "voronoi_polygon":
-            v = extract_boundary_features(G.nodes[node_ind]["voronoi_polygon"])
+        elif feature_item == "voronoi_polygon" or feature_item == "boundary_polygon":
+            v = extract_boundary_features(G.nodes[node_ind][feature_item])
             return v
         elif feature_item == "cell_type_revealed":
             v = [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
@@ -263,12 +264,13 @@ def nx_to_tg_graph(G,
         assert np.all(sub_G.nodes == np.arange(len(sub_G)))
 
         # Append node and edge features to the pyg data object
-        data = {"x": [], "edge_attr": [], "edge_index": []}
+        data = {"x": [], "edge_attr": [], "edge_index": [], "is_padding":[]}
         for node_ind in sub_G.nodes:
             feat_val = []
             for key in node_features:
                 feat_val.extend(process_feature(sub_G, key, node_ind=node_ind, **feature_kwargs))
             data["x"].append(feat_val)
+            data["is_padding"].append(sub_G.nodes[node_ind]["is_padding"])
 
         for edge_ind in sub_G.edges:
             feat_val = []
@@ -318,10 +320,11 @@ def get_feature_names(features, cell_type_mapping=None, biomarkers=None):
             feat_names.extend(["neighborhood_composition-%s" % ct
                                for ct in sorted(cell_type_mapping.keys(), key=lambda x: cell_type_mapping[x])])
         elif feat == "voronoi_polygon":
-            # TODO: handle different variations of feature extractions and 
-            # respective feature names generation dynamically
-            # feature "voronoi_polygon" will contain a list of hu moments
+            # TODO: feature "voronoi_polygon" will contain a list of hu moments / 
+            # handle variations in feature length
             feat_names.extend(["voronoi_polygon-%s" % i for i in range(1, 8)])
+        elif feat == "boundary_polygon":
+            feat_names.extend(["boundary_polygon-%s" % i for i in range(1, 8)])
         else:
             warnings.warn("Using additional feature: %s" % feat)
             feat_names.append(feat)

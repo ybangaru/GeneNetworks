@@ -18,33 +18,6 @@ from .inference import collect_predict_for_all_nodes, collect_predict_by_random_
 from helpers import mlflow_client, logger
 
 
-# # Modify your training loop to include predictions
-# def train_subgraph(model, dataset, device, node_task_loss_fn=None, ...):
-#     # Existing code...
-
-#     for i_iter in range(int(num_iterations)):
-#         batch = next(data_iter)
-#         batch = batch.to(device)
-
-#         # Forward pass
-#         res = model(batch)
-
-#         # Extract predictions
-#         _, node_pred = res[0].max(dim=1)
-
-#         # Extract true labels
-#         node_y = batch.node_y
-
-#         # Your existing code for loss calculation and backpropagation...
-
-#         if i_iter > 0 and i_iter % evaluate_freq == 0:
-#             # Your existing code...
-
-#             # Visualize confusion matrix
-#             plot_confusion_matrix(node_y.cpu().numpy(), node_pred.cpu().numpy(), class_names=dataset.cell_type_mapping.keys())
-
-
-
 def train_subgraph(model,
                    dataset,
                    device,
@@ -63,6 +36,7 @@ def train_subgraph(model,
                    lr=0.001,
                    graph_loss_weight=1.,
                    dataset_kwargs={},
+                   embedding_log_freq=100_000,
                    **kwargs):
     """ Train a GNN model through sampling subgraphs
 
@@ -79,6 +53,7 @@ def train_subgraph(model,
         num_workers (int): see `data.SubgraphSampler` for details
         evaluate_freq (int): evaluate the model by calling `evalute_fn`
             every `evaluate_freq` iterations
+        embedding_log_freq (int) : log the cell type embeddings as numpy array
         evaluate_fn (list): list of callback functions to evaluate the model
             during training
         evaluate_on_train (bool): if to evaluate the model on training set,
@@ -93,8 +68,13 @@ def train_subgraph(model,
 
     with mlflow.start_run(run_name=kwargs['run_name']) as run:
 
-        train_inds_str = ",".join(map(str, train_inds))
-        valid_inds_str = ",".join(map(str, valid_inds))
+        directory_run = f"/data/qd452774/spatial_transcriptomics/mlruns/{run.info.experiment_id}/{run.info.run_id}/artifacts"
+        for item in ["embeddings", "node_probs", "node_class", "node_class_pred", "model", "scorefile"]:
+            if not os.path.exists(f"{directory_run}/{item}"):
+                os.makedirs(f"{directory_run}/{item}")
+        kwargs['model_folder'] = f"{directory_run}/model"
+        kwargs['score_file'] = f"{directory_run}/scorefile/results.txt"
+        
 
         for arg, value in dataset_kwargs.items():
             try:
@@ -108,13 +88,12 @@ def train_subgraph(model,
         params_to_log = {
             "node_task_loss_fn": node_task_loss_fn,
             "graph_task_loss_fn": graph_task_loss_fn,
-            # "train_inds": train_inds_str,
-            # "valid_inds": valid_inds_str,
             "num_iterations": num_iterations,
             "num_regions_per_segment": num_regions_per_segment,
             "num_iterations_per_segment": num_iterations_per_segment,
             "num_workers": num_workers,
             "evaluate_freq": evaluate_freq,
+            "embedding_log_freq" : embedding_log_freq,
             "evaluate_fn": evaluate_fn,
             "evaluate_on_train": evaluate_on_train,
             "batch_size": batch_size,
@@ -130,6 +109,7 @@ def train_subgraph(model,
             mlflow.log_param(arg, value)
 
         model.zero_grad()
+        best_node_loss_metric_value = float('inf') 
             
         model = model.to(device)
         model.train()
@@ -175,6 +155,23 @@ def train_subgraph(model,
             loss.backward()
             optimizer.step()
             model.zero_grad()
+                
+            # Log embeddings
+            if i_iter > 0 and i_iter % embedding_log_freq == 0:
+                embeddings = model.gnn.x_embedding.weight.detach().cpu().numpy()
+                node_classes = node_y.cpu().numpy()
+                node_classes_pred = res[0].detach().cpu().numpy()
+                node_probs = torch.nn.functional.softmax(res[0], dim=1).detach().cpu().numpy()
+
+                embedding_filename = f"{directory_run}/embeddings/{i_iter}.npy"
+                node_probs_filename = f"{directory_run}/node_probs/{i_iter}.npy"
+                node_classes_filename = f"{directory_run}/node_class/{i_iter}.npy"
+                node_classes_pred_filename = f"{directory_run}/node_class_pred/{i_iter}.npy"
+
+                np.save(embedding_filename, embeddings)
+                np.save(node_probs_filename, node_probs)
+                np.save(node_classes_filename, node_classes)
+                np.save(node_classes_pred_filename, node_classes_pred)
 
             if i_iter > 0 and i_iter % evaluate_freq == 0:
                 summary_str = "Finished iterations %d" % i_iter
@@ -185,19 +182,6 @@ def train_subgraph(model,
                     summary_str += ", node loss %.2f" % np.mean(node_losses[:])
                     mlflow.log_metric("train_node_loss", np.mean(node_losses[:]), step=i_iter)
 
-                # _, node_pred = res[0].max(dim=1)
-                # confusion_matrix_fig = plot_confusion_matrix(node_y.cpu().numpy(), node_pred.cpu().numpy(), class_names=list(dataset.cell_annotation_mapping.keys()))
-                # mlflow.log_figure(confusion_matrix_fig, f"confusion_matrix_{i_ter}.png")
-
-                # node_probs = torch.nn.functional.softmax(res[0], dim=1).detach().cpu().numpy()
-                # precision_recall_fig = plot_precision_recall_curve(node_y.cpu().numpy(), node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
-
-                # node_embeddings  = res[-1].detach().cpu().numpy()
-                # node_embb_2d_fig = plot_node_embeddings_2d(node_embeddings, node_y.cpu().numpy(), class_names=list(dataset.cell_annotation_mapping.keys()))
-                # node_embb_2d_fig.show()
-
-                # node_embb_3d_fig = plot_node_embeddings_3d(node_embeddings, node_y.cpu().numpy(), class_names= list(dataset.cell_annotation_mapping.keys()))
-                # node_embb_3d_fig.show()
                 # if len(graph_losses) > 100:
                 #     summary_str += ", graph loss %.2f" % np.mean(graph_losses[-100:])
                 #     mlflow.log_metric("train_graph_loss", np.mean(node_losses[-100:]))
@@ -237,14 +221,17 @@ def train_subgraph(model,
                         mlflow.log_metric(f"{graph_type}-{dataset_type}-top5_acc", top5_acc, step=i_iter)        
 
                 for fn in kwargs['model_save_fn']:
+                    current_metric_value = np.mean(node_losses[-100:]) if len(node_losses) > 100 else np.mean(node_losses[:])
                     fn(model,
                         dataset,
                         device,
-                        train_inds=train_inds if evaluate_on_train else None,
-                        valid_inds=valid_inds,
-                        batch_size=batch_size,
+                        best_model_metric="train_node_loss",
+                        best_model_metric_value=best_node_loss_metric_value,
+                        current_metric_value=current_metric_value,                        
                         **kwargs
                         )
+                    if current_metric_value < best_node_loss_metric_value:
+                        best_node_loss_metric_value = current_metric_value                        
 
                 model.train()
         dataset.set_indices(np.arange(dataset.N))
@@ -443,4 +430,45 @@ def save_model_weight(model,
         os.makedirs(model_folder, exist_ok=True)
         fs = [f for f in os.listdir(model_folder) if f.startswith('model_save')]
         torch.save(model.state_dict(), os.path.join(model_folder, 'model_save_%d.pt' % len(fs)))
+    return
+
+
+def save_models_best_latest(model,
+                      dataset,
+                      device,
+                      model_folder=None,
+                      best_model_metric=None,
+                      best_model_metric_value=None,
+                      current_metric_value=None,
+                      **kwargs):
+    """
+    Save the latest model and update the best model based on a specified metric.
+
+    Args:
+        model (torch.nn.Module): The PyTorch model to save.
+        dataset: Your dataset (if needed for metrics calculation).
+        device: The device on which the model is stored.
+        model_folder (str): The folder to save the models.
+        best_model_metric (str): The metric to use for determining the best model.
+        best_model_metric_value: The best metric value achieved so far.
+        current_metric_value: The metric value for the current iteration.
+        **kwargs: Additional arguments.
+
+    Returns:
+        None
+    """
+    if model_folder is not None:
+        os.makedirs(model_folder, exist_ok=True)
+
+        # Save the latest model
+        torch.save(model.state_dict(), os.path.join(model_folder, 'latest_model.pt'))
+
+        # Update the best model if a metric is specified
+        if best_model_metric is not None:
+            if (
+                best_model_metric_value is None
+                or current_metric_value < best_model_metric_value
+            ):
+                torch.save(model.state_dict(), os.path.join(model_folder, 'best_model.pt'))
+
     return
