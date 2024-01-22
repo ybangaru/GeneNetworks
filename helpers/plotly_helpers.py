@@ -14,6 +14,7 @@ import numpy as np
 import matplotlib.colors as mcolors
 from sklearn.metrics import confusion_matrix, precision_recall_curve, auc
 from sklearn.preprocessing import LabelBinarizer
+from .logging_setup import logger
 
 pio.templates.default = "plotly_dark"
 sc.settings.verbosity = 3
@@ -500,7 +501,7 @@ def plotly_spatial_scatter_categorical(test_boundaries, color_column):
                         ),
                     )
             except KeyError as e:
-                # print(f"KeyError: {e}")
+                logger.info(f"KeyError: {e}")
                 continue
 
     # Set layout properties
@@ -726,98 +727,7 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
     return fig
 
 
-class VisualizePipeline:
-    def __init__(self, info_dict):
-        self.info_cluster = info_dict
-        self.file_name = self.info_cluster["data_file_name"]
-        self.state = self.info_cluster["state"]
-        self.data_filter_name = self.info_cluster["data_filter_name"]
-        self.names_list = self.info_cluster["names_list"]
-        # self.filters = (self.info_cluster[0], self.info_cluster[1])
-
-        self.all_generated_pcas = {}
-        self.all_generated_umaps = {}
-        # self.all_generated_spatial = {}
-
-        self.data = self.read_data()
-        self.categorical_columns = self.data.obs.select_dtypes(include=["category", "object", "bool"]).columns
-        self.numerical_columns = self.data.obs.select_dtypes(include=["float32", "int32", "float64", "int64"]).columns
-
-    def read_data(self):
-        # if not self.data:
-        data = sc.read_h5ad(self.file_name)
-        return data
-
-    def generate_pca_plots(self):
-        for cate_item in self.categorical_columns:
-            fig = plotly_pca_categorical(
-                self.data,
-                self.data_filter_name,
-                color_key=cate_item,
-                return_fig=True,
-                x_dim=0,
-                y_dim=1,
-                show=False,
-            )
-            self.all_generated_pcas[f"{cate_item}"] = fig
-        for num_item in self.numerical_columns:
-            fig = plotly_pca_numerical(
-                self.data,
-                self.data_filter_name,
-                color_key=num_item,
-                return_fig=True,
-                x_dim=0,
-                y_dim=1,
-                show=False,
-            )
-            self.all_generated_pcas[f"{num_item}"] = fig
-
-    def generate_umap_plots(self):
-        for cate_item in self.categorical_columns:
-            # fig_true = plotly_umap_categorical(
-            #     self.data,
-            #     self.data_filter_name,
-            #     color_key=cate_item,
-            #     from_annotations=True,
-            # )
-            # self.all_generated_umaps[f"UMAP_{cate_item}_from_annot"] = fig_true
-            fig_false = plotly_umap_categorical(
-                self.data,
-                self.data_filter_name,
-                color_key=cate_item,
-                from_annotations=False,
-            )
-            self.all_generated_umaps[f"{cate_item}"] = fig_false
-        for num_item in self.numerical_columns:
-            # fig_true = plotly_umap_numerical(
-            #     self.data,
-            #     self.data_filter_name,
-            #     color_key=num_item,
-            #     from_annotations=True,
-            # )
-            # self.all_generated_umaps[f"UMAP_{num_item}_from_annot"] = fig_true
-            fig_false = plotly_umap_numerical(
-                self.data,
-                self.data_filter_name,
-                color_key=num_item,
-                from_annotations=False,
-            )
-            self.all_generated_umaps[f"{num_item}"] = fig_false
-
-    def filter_by_centroid_coordinates(self, spatial_loader):
-        return spatial_loader.filter_by_centroid_coordinates(self.data)
-
-    def get_boundaries_for_indices(self, spatial_loader):
-        return spatial_loader.get_boundaries_for_indices(self.data)
-
-    def get_boundaries_of_one_fov(self, spatial_loader, fov_value):
-        return spatial_loader.get_boundaries_of_one_fov(self.data, fov_value)
-
-    def get_boundaries_of_multiple_fov(self, spatial_loader, fov_values):
-        return spatial_loader.get_boundaries_of_multiple_fov(self.data, fov_values)
-
-
-def plot_precision_recall_curve(y_true, y_scores, class_names, title="Precision-Recall Curve"):
+def plotly_precision_recall_curve(y_true, y_scores, class_names, title="Precision-Recall Curve"):
     lb = LabelBinarizer()
     y_true_bin = lb.fit_transform(y_true)
 
@@ -838,7 +748,7 @@ def plot_precision_recall_curve(y_true, y_scores, class_names, title="Precision-
     return fig
 
 
-def plot_confusion_matrix(y_true, y_pred, labels, class_names, title="Confusion Matrix"):
+def plotly_confusion_matrix(y_true, y_pred, labels, class_names, title="Confusion Matrix"):
     cm = confusion_matrix(y_true, y_pred, labels=labels)
     cm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]  # Normalize confusion matrix
 
@@ -858,7 +768,7 @@ def plot_confusion_matrix(y_true, y_pred, labels, class_names, title="Confusion 
     return fig
 
 
-def plot_node_embeddings_2d(embeddings, labels, class_names, title="Node Embeddings in 2D"):
+def plotly_node_embeddings_2d(embeddings, labels, class_names, title="Node Embeddings in 2D"):
     # Map numeric labels to class names
     label_names = [class_names[label] for label in labels]
 
@@ -873,7 +783,7 @@ def plot_node_embeddings_2d(embeddings, labels, class_names, title="Node Embeddi
     return fig
 
 
-def plot_node_embeddings_3d(embeddings, labels, class_names, title="Node Embeddings in 3D"):
+def plotly_node_embeddings_3d(embeddings, labels, class_names, title="Node Embeddings in 3D"):
     # Map numeric labels to class names
     label_names = [class_names[label] for label in labels]
 

@@ -8,13 +8,7 @@ import json
 import os
 import numpy as np
 import pickle
-from helpers import ANNOTATION_DICT
-
-EDGE_TYPES = {
-    "neighbor": 0,
-    "distant": 1,
-    "self": 2,
-}
+from .experiment_config import ANNOTATION_DICT
 
 
 def get_cell_type_metadata(nx_graph_files):

@@ -10,17 +10,10 @@ import numpy as np
 from scipy.special import softmax
 from sklearn.metrics import roc_auc_score, r2_score
 from torch_geometric.data import Batch
-
-from .data import SubgraphSampler
 from concurrent.futures import ThreadPoolExecutor
 
-from helpers import (
-    NO_JOBS,
-    plot_confusion_matrix,
-    plot_precision_recall_curve,
-    plot_node_embeddings_2d,
-    plot_node_embeddings_3d,
-)
+from .data import SubgraphSampler
+from .local_config import NO_JOBS
 
 
 def get_num_nodes(dataset, i):
@@ -58,13 +51,13 @@ def predict_on_batch(batch, model, device, dataset):
         "node_y": node_y.cpu().numpy(),
         "node_pred": node_pred.cpu().numpy(),
     }
-    # confusion_matrix_fig = plot_confusion_matrix(node_y.cpu().numpy(), node_pred.cpu().numpy(), labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_annotation_mapping.keys()))
+    # confusion_matrix_fig = plotly_confusion_matrix(node_y.cpu().numpy(), node_pred.cpu().numpy(), labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_annotation_mapping.keys()))
     node_probs = torch.nn.functional.softmax(res[0], dim=1).detach().cpu().numpy()
     precision_recall_info = {
         "node_y": node_y.cpu().numpy(),
         "node_probs": node_probs,
     }
-    # precision_recall_fig = plot_precision_recall_curve(node_y.cpu().numpy(), node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
+    # precision_recall_fig = plotly_precision_recall_curve(node_y.cpu().numpy(), node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
     node_embeddings = res[-1].detach().cpu().numpy()
     return node_preds, graph_preds, confusion_matrix_info, precision_recall_info, node_embeddings
 
@@ -109,11 +102,11 @@ def save_pred(
 
     # node_y_val = np.concatenate([item["node_y"] for item in confusion_matrix_results])
     # node_pred_val = np.concatenate([item["node_pred"] for item in confusion_matrix_results])
-    # confusion_matrix_fig = plot_confusion_matrix(node_y_val, node_pred_val, labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_annotation_mapping.keys()))
+    # confusion_matrix_fig = plotly_confusion_matrix(node_y_val, node_pred_val, labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_annotation_mapping.keys()))
     # confusion_matrix_fig.write_html(f"results/confusion_matrix_{len(node_y_val)}.html")
 
     # node_probs = np.concatenate([item["node_probs"] for item in precision_recall_results])
-    # precision_recall_fig = plot_precision_recall_curve(node_y_val, node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
+    # precision_recall_fig = plotly_precision_recall_curve(node_y_val, node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
     # precision_recall_fig.write_html(f"results/precision_recall_{len(node_y_val)}.html")
 
     return
