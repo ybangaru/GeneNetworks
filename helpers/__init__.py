@@ -14,7 +14,6 @@ from .plotly_helpers import (
     plotly_node_embeddings_3d,
 )
 from .experiment_handlers import spatialPipeline, spatialPreProcessor, VisualizePipeline
-from .data_boundary import BoundaryDataLoader
 from .boundary_feature_extraction import extract_boundary_features
 from .graphlet_builds import get_graphlet_counts
 from .logging_setup import logger
@@ -43,7 +42,7 @@ from .graph_build import (
     build_voronoi_polygon_to_cell_mapping,
     assign_attributes,
 )
-from .data import CellularGraphDataset, SubgraphSampler, get_biomarker_metadata, k_hop_subgraph
+from .data import CellularGraphDataset, SubgraphSampler, BoundaryDataLoader, get_biomarker_metadata, k_hop_subgraph
 from .models import GNN_pred, MLP_pred
 from .transform import (
     FeatureMask,
