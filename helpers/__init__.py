@@ -13,7 +13,7 @@ from .plotly_helpers import (
     plotly_node_embeddings_2d,
     plotly_node_embeddings_3d,
 )
-from .clustering_scrna import spatialPipeline, spatialPreProcessor, VisualizePipeline
+from .experiment_handlers import spatialPipeline, spatialPreProcessor, VisualizePipeline
 from .data_boundary import BoundaryDataLoader
 from .boundary_feature_extraction import extract_boundary_features
 from .graphlet_builds import get_graphlet_counts
