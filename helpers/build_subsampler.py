@@ -15,7 +15,7 @@ def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edge
     # Get a list of discrete colors from Plotly
     color_dict = {}
     for i, string in enumerate(unique_colors):
-        color_dict[string] = COLORS_FROM_PLOTLY[i % len(COLORS_FROM_PLOTLY)]
+        color_dict[string] = COLORS_LIST[i % len(COLORS_LIST)]
 
     legend_boolen_set = set()
 

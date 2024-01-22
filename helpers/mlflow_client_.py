@@ -1,16 +1,14 @@
-import os
+import json
+import glob
+import re
+import pandas as pd
+import numpy as np
 import mlflow
 import scanpy as sc
 from .logging_setup import logger
 
 mlflow.set_tracking_uri("/data/qd452774/spatial_transcriptomics/mlruns/")
-mlflow_client = mlflow.tracking.MlflowClient()
-
-# Read the SLURM_CPUS_PER_TASK environment variable
-# SLURM_CPUS_PER_TASK = os.environ.get("SLURM_CPUS_PER_TASK")
-# Set the number of jobs to the value specified in SLURM_CPUS_PER_TASK
-# NO_JOBS = int(SLURM_CPUS_PER_TASK) if SLURM_CPUS_PER_TASK is not None else 1
-NO_JOBS = int(os.environ.get("SLURM_CPUS_PER_TASK", 3))
+MLFLOW_CLIENT = mlflow.tracking.MlflowClient()
 
 
 def get_run_info(x_experiment, x_resolution):
@@ -19,11 +17,11 @@ def get_run_info(x_experiment, x_resolution):
     xrun_name = f"steady-state-using-220-PCs-50-neighbors-leiden-{x_resolution}"
 
     # Get the experiment ID by name
-    experiment = mlflow_client.get_experiment_by_name(xexp_name)
+    experiment = MLFLOW_CLIENT.get_experiment_by_name(xexp_name)
     experiment_id = experiment.experiment_id
 
     # Search for the run by run name within the specified experiment
-    runs = mlflow_client.search_runs(experiment_ids=[experiment_id], filter_string=f"tags.run_name='{xrun_name}'")
+    runs = MLFLOW_CLIENT.search_runs(experiment_ids=[experiment_id], filter_string=f"tags.run_name='{xrun_name}'")
 
     # Check if any runs match the criteria
     if len(runs) > 1:
@@ -49,14 +47,69 @@ def read_run_result_ann_data(data_filter_name, x_resolution):
     return x_data
 
 
-import multiprocessing
+def read_run_node_true_pred_labels(experiment_id, run_id):
+    true_labels_folder = f"/data/qd452774/spatial_transcriptomics/mlruns/{experiment_id}/{run_id}/artifacts/node_class"
+    pred_labels_folder = f"/data/qd452774/spatial_transcriptomics/mlruns/{experiment_id}/{run_id}/artifacts/node_probs"
+
+    true_labels_file_names = sorted(glob.glob(f'{true_labels_folder}/*.npy'), key=lambda x: int(re.search(r'\d+', x).group()))
+    pred_labels_file_names = sorted(glob.glob(f'{pred_labels_folder}/*.npy'), key=lambda x: int(re.search(r'\d+', x).group()))
+
+    true_numbers = []
+    pred_numbers = []
+    true_labels = []
+    pred_labels = []
+
+    for file_name in true_labels_file_names:
+        number = int(file_name.split('/')[-1].split('.')[0])
+        true_numbers.append(number)
+
+        true_array = np.load(file_name)
+        true_labels.append(true_array)
+
+    for file_name in pred_labels_file_names:
+        number = int(file_name.split('/')[-1].split('.')[0])
+        pred_numbers.append(number)
+
+        pred_array = np.load(file_name)
+        pred_labels.append(pred_array)        
+
+    df = pd.DataFrame({'true_num': true_numbers, 'pred_num': pred_numbers, 'true_labels': true_labels, 'pred_labels': pred_labels})
+    df['pred_labels'] = df['pred_labels'].apply(lambda x: np.argmax(x, axis=1))
+    assert (df['true_num'] == df['pred_num']).all()
+    df['Number'] = df['true_num']
+    df = df.drop(['true_num', 'pred_num'], axis=1)
+    return df
+
+
+
+def read_run_embeddings_df(experiment_id, run_id):
+    embedding_folder = f"/data/qd452774/spatial_transcriptomics/mlruns/{experiment_id}/{run_id}/artifacts/embeddings"
+    file_names = sorted(glob.glob(f'{embedding_folder}/*.npy'), key=lambda x: int(re.search(r'\d+', x).group()))
+
+    numbers = []
+    embeddings = []
+
+    for file_name in file_names:
+        number = int(file_name.split('/')[-1].split('.')[0])
+        numbers.append(number)
+
+        embedding_array = np.load(file_name)
+        embeddings.append(embedding_array)
+
+    # Create a DataFrame
+    df = pd.DataFrame({'Number': numbers, 'Embedding': embeddings})
+    df['Dim0'] = df['Embedding'].apply(lambda x: x[:, 0])
+    df['Dim1'] = df['Embedding'].apply(lambda x: x[:, 1])
+    df['Dim2'] = df['Embedding'].apply(lambda x: x[:, 2])
+
+    return df
+
 
 # BASE_MICRONS = "20um"
 # BASE_MICRONS = "10um"
 BASE_MICRONS = "5um"
 # BASE_MICRONS = "1um"
 
-import json
 
 # Define the directory where your JSON files are located
 liver_slices = ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"]
@@ -86,7 +139,7 @@ for file_name_index in range(len(file_names)):
 
 SLICE_PIXELS_EDGE_CUTOFF = {key: int(value) for key, value in SLICE_PIXELS_EDGE_CUTOFF.items()}
 
-
+# TODO: Handle annotation dictionary at lower level of abstraction (using experiment & run ids)
 ANNOTATION_DICT = {
     '0': 'Hepatocytes_1',
     '1': 'Hepatocytes_Intermediate',

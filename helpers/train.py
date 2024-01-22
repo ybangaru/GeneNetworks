@@ -15,7 +15,7 @@ import mlflow
 from .data import SubgraphSampler
 from .inference import collect_predict_for_all_nodes, collect_predict_by_random_sample
 
-from helpers import mlflow_client, logger
+from helpers import MLFLOW_CLIENT, logger
 
 
 def train_subgraph(model,

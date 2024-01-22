@@ -12,12 +12,14 @@ from typing import (
 
 import numpy as np
 import matplotlib.colors as mcolors
+from sklearn.metrics import confusion_matrix, precision_recall_curve, auc
+from sklearn.preprocessing import LabelBinarizer
 
 pio.templates.default = "plotly_dark"
 sc.settings.verbosity = 3
 sc.settings.set_figure_params(dpi=120, facecolor="white")
 
-COLORS_FROM_PLOTLY = (
+COLORS_LIST = (
     px.colors.qualitative.Bold
     + px.colors.qualitative.Dark24
     # + px.colors.qualitative.Vivid
@@ -39,8 +41,8 @@ def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edge
     unique_colors = sorted(color_column.unique())
 
     unique_colors.sort()
-    color_dict = dict(zip(unique_colors, COLORS_FROM_PLOTLY[:len(unique_colors)]))
-    color_dict['Unknown'] = COLORS_FROM_PLOTLY[len(unique_colors)]
+    color_dict = dict(zip(unique_colors, COLORS_LIST[:len(unique_colors)]))
+    color_dict['Unknown'] = COLORS_LIST[len(unique_colors)]
 
     legend_boolen_set = set()
 
@@ -155,7 +157,7 @@ def plotly_pca_categorical(
     color_list = adata.obs[color_key].astype(str).replace("nan", "Unknown")
     distinct_values = color_list.unique()
     distinct_values.sort()
-    color_mapping = dict(zip(distinct_values, COLORS_FROM_PLOTLY[:len(distinct_values)]))
+    color_mapping = dict(zip(distinct_values, COLORS_LIST[:len(distinct_values)]))
     pca_df["category"] = color_list
 
     fig = px.scatter(
@@ -320,7 +322,7 @@ def plotly_umap_categorical(
 
     distinct_values = color_list.unique()
     distinct_values.sort()
-    color_mapping = dict(zip(distinct_values, COLORS_FROM_PLOTLY[:len(distinct_values)]))
+    color_mapping = dict(zip(distinct_values, COLORS_LIST[:len(distinct_values)]))
     umap_df["category"] = color_list
 
     fig = px.scatter(
@@ -487,7 +489,7 @@ def plotly_spatial_scatter_categorical(test_boundaries, color_column):
     unique_colors = sorted(color_column.unique())
 
     unique_colors.sort()
-    color_dict = dict(zip(unique_colors, COLORS_FROM_PLOTLY[:len(unique_colors)]))
+    color_dict = dict(zip(unique_colors, COLORS_LIST[:len(unique_colors)]))
 
     legend_boolen_set = set()
 
@@ -673,8 +675,8 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
     unique_colors = sorted(node_color_col.unique())
 
     unique_colors.sort()
-    color_dict = dict(zip(unique_colors, COLORS_FROM_PLOTLY[:len(unique_colors)]))
-    color_dict['Unknown'] = COLORS_FROM_PLOTLY[len(unique_colors)]
+    color_dict = dict(zip(unique_colors, COLORS_LIST[:len(unique_colors)]))
+    color_dict['Unknown'] = COLORS_LIST[len(unique_colors)]
 
     node_colors = []
     node_names = []
@@ -871,4 +873,75 @@ class VisualizePipeline:
         return spatial_loader.get_boundaries_of_one_fov(self.data, fov_value)
 
     def get_boundaries_of_multiple_fov(self, spatial_loader, fov_values):
-        return spatial_loader.get_boundaries_of_multiple_fov(self.data, fov_values)            
+        return spatial_loader.get_boundaries_of_multiple_fov(self.data, fov_values)
+
+
+def plot_precision_recall_curve(y_true, y_scores, class_names, title='Precision-Recall Curve'):
+    lb = LabelBinarizer()
+    y_true_bin = lb.fit_transform(y_true)
+    
+    fig = go.Figure()
+
+    for i in range(len(class_names)):
+        precision, recall, _ = precision_recall_curve(y_true_bin[:, i], y_scores[:, i])
+        pr_auc = auc(recall, precision)
+
+        fig.add_trace(go.Scatter(x=recall, y=precision, mode='lines',
+                                 name=f'{class_names[i]} (AUC = {pr_auc:.2f})'))
+
+    fig.update_layout(title=title,
+                      xaxis=dict(title='Recall'),
+                      yaxis=dict(title='Precision'),
+                    #   legend=dict(x=0, y=1, traceorder='normal')
+                      )
+    return fig
+
+
+def plot_confusion_matrix(y_true, y_pred, labels, class_names, title='Confusion Matrix'):
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]  # Normalize confusion matrix
+
+    fig = px.imshow(cm,
+                    labels=dict(x="Predicted", y="True"),
+                    x=class_names,
+                    y=class_names,
+                    color_continuous_scale="Viridis",
+                    title=title,
+                    origin='upper')
+
+    fig.update_layout(xaxis=dict(side='top'))
+    fig.update_layout(coloraxis_colorbar=dict(title='Normalized Count'))
+
+    return fig
+
+def plot_node_embeddings_2d(embeddings, labels, class_names, title='Node Embeddings in 2D'):
+    # Map numeric labels to class names
+    label_names = [class_names[label] for label in labels]
+
+    df = pd.DataFrame({
+        'X': embeddings[:, 0],
+        'Y': embeddings[:, 1],
+        'Label': label_names  # Use the mapped class names as labels
+    })
+
+    fig = px.scatter(df, x='X', y='Y', color='Label', hover_name='Label', title=title,
+                     category_orders={'Label': class_names})
+
+    return fig
+
+
+def plot_node_embeddings_3d(embeddings, labels, class_names, title='Node Embeddings in 3D'):
+    # Map numeric labels to class names
+    label_names = [class_names[label] for label in labels]
+
+    df = pd.DataFrame({
+        'X': embeddings[:, 0],
+        'Y': embeddings[:, 1],
+        'Z': embeddings[:, 2],  # Add Z coordinate for the 3D plot
+        'Label': label_names
+    })
+
+    fig = px.scatter_3d(df, x='X', y='Y', z='Z', color='Label', hover_name='Label', title=title,
+                        category_orders={'Label': class_names})
+
+    return fig
