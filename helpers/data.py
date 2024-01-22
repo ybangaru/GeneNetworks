@@ -98,6 +98,8 @@ class CellularGraphDataset(Dataset):
             self.cell_type_mapping = cell_type_mapping
             self.cell_type_freq = cell_type_freq
 
+        self.annotation_cell_type_mapping = {v: k for k, v in ANNOTATION_DICT.items()}
+
         # Find all available biomarkers for cells in the dataset
         if biomarkers is None:
             nx_graph_files = [os.path.join(self.raw_dir, f) for f in self.raw_file_names]
@@ -126,6 +128,7 @@ class CellularGraphDataset(Dataset):
         self.feature_kwargs['biomarkers'] = self.biomarkers
         self.feature_kwargs['cell_type_freq'] = self.cell_type_freq
         self.feature_kwargs['annotation_freq_mapping'] = self.cell_annotation_mapping
+        self.feature_kwargs['annotation_cell_type_mapping'] = self.annotation_cell_type_mapping
 
         # Note this command below calls the `process` function
         super(CellularGraphDataset, self).__init__(root, None, pre_transform)
@@ -237,7 +240,11 @@ class CellularGraphDataset(Dataset):
                 torch.save(d, os.path.join(self.processed_dir, '%s.%d.gpt' % (d.region_id, d.component_id)))
         
         logger.info("Starting processing of %d graphs" % len(self.raw_file_names))
-        run_parallel_processing([os.path.join(self.raw_dir, file_item) for file_item in self.raw_file_names])
+        all_nx_files = [os.path.join(self.raw_dir, file_item) for file_item in self.raw_file_names]
+        # for file_name in all_nx_files[200:]:
+        #     save_file(file_name)
+        run_parallel_processing(all_nx_files)
+        logger.info("Done processing of %d graphs" % len(self.raw_file_names))
         return
 
     def __getitem__(self, i):
@@ -350,7 +357,8 @@ class CellularGraphDataset(Dataset):
 
     def pick_center(self, data):
         """Randomly pick a center cell from a full cellular graph, cell type balanced"""
-        cell_types = data["x"][:, 0].long()
+        # cell_types = data["x"][:, 0].long()
+        cell_types = data["x"][data["is_padding"]==False][:,0].long()
         freq = self.sampling_freq.gather(0, cell_types)
         freq = freq / freq.sum()
         center_node_ind = np.random.choice(np.arange(len(freq)), p=freq.cpu().data.numpy())
@@ -441,7 +449,7 @@ class CellularGraphDataset(Dataset):
         G = self.get_full_nx(idx)
         _G = G.subgraph(np.array(sub_node_inds))
 
-        node_colors = {f"{_G.nodes[n]['cell_id']}": self.cell_type_mapping[_G.nodes[n]['cell_type']] for n in _G.nodes}
+        node_colors = {f"{_G.nodes[n]['cell_id']}": self.cell_[_G.nodes[n]['cell_type']] for n in _G.nodes}
         test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]['voronoi_polygon'] for n in _G.nodes}
         # color_column = pd.Series(node_colors, index=_G.nodes)
         color_column = pd.DataFrame.from_dict(node_colors, orient='index', columns=['leiden_res'])

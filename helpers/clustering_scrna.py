@@ -160,9 +160,15 @@ class spatialPipeline:
             padding_dict = self.segment_instances[(segment_config["sample_name"], segment_config["region_id"][0], segment_config["region_id"][1], segment_config.get("segments_per_dimension", 20))].padding["bool_info"]
         else:
             padding_dict = None
+        
+        if padding_dict:
+            if all(padding_dict.values()) == True:
+                return None
 
         G_segment = assign_attributes(G_segment, segment_data, segment_boundaries_given, node_to_cell_mapping, pretransform_networkx_config["neighbor_edge_cutoff"], padding_dict)
-
+        
+        slice_region_id = f"{segment_config['sample_name']}-{segment_config['region_id'][0]}-{segment_config['region_id'][1]}"
+        G_segment.region_id = slice_region_id
         # TODO: refactor for modular node and edge feature builds
         # cell_ids, cell_centroids = self._get_cell_centroids_array(segment_boundaries.keys())
         # segment_boundaries = calcualte_voronoi_from_coords(
@@ -184,10 +190,15 @@ class spatialPipeline:
         plots_ = {}        
         if pretransform_networkx_config["edge_config"]["type"] == "Delaunay":
             given_boundaries = {G_segment.nodes[n]['cell_id'] : G_segment.nodes[n]["boundary_polygon"] for n in G_segment.nodes}
+            if self.segment_instances.get((segment_config['sample_name'], segment_config['region_id'][0], segment_config['region_id'][1], segment_config['segments_per_dimension'])):
+                color_col = pd.Series(self.segment_instances[(segment_config['sample_name'], segment_config['region_id'][0], segment_config['region_id'][1], segment_config['segments_per_dimension'])].padding['bool_info']).map({True : "True", False:"False"})
+                padding_fig = plotly_spatial_scatter_categorical(given_boundaries, color_col)
+                plots_["padding_info"] = padding_fig
             if pretransform_networkx_config["boundary_type"] == "voronoi":
                 voronoi_boundaries = {G_segment.nodes[n]['cell_id'] : G_segment.nodes[n]["voronoi_polygon"] for n in G_segment.nodes}
                 vor_bound_fig = plotly_spatial_scatter_categorical(voronoi_boundaries, self.data.obs[cat_column])
                 plots_["boundary_voronoi"] = vor_bound_fig
+
             given_bound_fig = plotly_spatial_scatter_categorical(given_boundaries, self.data.obs[cat_column])
             plots_["boundary_given_fig"] = given_bound_fig
         

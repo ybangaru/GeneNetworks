@@ -103,13 +103,12 @@ class BoundaryDataLoader:
 
         if self.padding is not None:
             cell_data = data[list(boundaries_filtered_fovs_dict.keys())]
-            mask_padding = (cell_data.obsm["spatial"][:, 0] < self.centroid_to_fov_x[x_index][0]) | (
-                cell_data.obsm["spatial"][:, 0] > self.centroid_to_fov_x[x_index][1]#self.centroid_to_fov_x[x_index][1]
-            ) & (cell_data.obsm["spatial"][:, 1] < self.centroid_to_fov_y[y_index][0]) | (
-                cell_data.obsm["spatial"][:, 1] >= self.centroid_to_fov_y[y_index][1]
-            )
-            is_padding = dict(zip(cell_data[mask_padding].obs.index.tolist(), [True]*len(cell_data[mask_padding].obs.index.tolist())))
-            is_padding.update(dict(zip(cell_data[~mask_padding].obs.index.tolist(), [False]*len(cell_data[~mask_padding].obs.index.tolist()))))
+            mask_padding = (self.centroid_to_fov_x[x_index][0] < cell_data.obsm["spatial"][:, 0]) \
+            & (cell_data.obsm["spatial"][:, 0] < self.centroid_to_fov_x[x_index][1]) \
+            & (self.centroid_to_fov_y[y_index][0] < cell_data.obsm["spatial"][:, 1]) \
+            & (cell_data.obsm["spatial"][:, 1] <= self.centroid_to_fov_y[y_index][1])
+            is_padding = dict(zip(cell_data[mask_padding].obs.index.tolist(), [False]*len(cell_data[mask_padding].obs.index.tolist())))
+            is_padding.update(dict(zip(cell_data[~mask_padding].obs.index.tolist(), [True]*len(cell_data[~mask_padding].obs.index.tolist()))))
             self.padding["bool_info"] = is_padding
         return boundaries_filtered_fovs_dict
 
