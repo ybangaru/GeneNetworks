@@ -1,8 +1,6 @@
-
-
-
 import numpy as np
 import networkx as nx
+
 
 def calculate_node_state(node, sub_data):
     # Get the adjacency matrix of the subgraph

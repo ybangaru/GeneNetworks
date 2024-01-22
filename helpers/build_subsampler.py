@@ -1,10 +1,9 @@
-
 from helpers import CellularGraphDataset
 from helpers.plotly_helpers import *
 from helpers import logger
 
-def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edges=None):
 
+def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edges=None):
     fig = go.Figure()
 
     x_label = "X-position"
@@ -23,7 +22,7 @@ def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edge
         try:
             x = value[:, 0]
             y = value[:, 1]
-            
+
             if color_column.loc[key] in legend_boolen_set:
                 fig.add_trace(
                     go.Scatter(
@@ -36,7 +35,7 @@ def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edge
                         showlegend=False,
                         name=f"{color_column.loc[key]}",
                         text=f"{key}",
-                        hovertemplate='<b>%{text}</b>',
+                        hovertemplate="<b>%{text}</b>",
                     ),
                 )
             else:
@@ -51,10 +50,10 @@ def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edge
                         legendgroup=f"{color_column.loc[key]}",
                         name=f"{color_column.loc[key]}",
                         text=f"{key}",
-                        hovertemplate='<b>%{text}</b>',
+                        hovertemplate="<b>%{text}</b>",
                     ),
                 )
-                
+
             # Add edges to the plot if subgraph_edges is provided
             if subgraph_edges:
                 for edge in subgraph_edges:
@@ -92,11 +91,10 @@ def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edge
 
 
 def build_subgraph_for_plotly(dataset, idx, center_ind):
-
     # def plot_subgraph(self, idx, center_ind):
     #     """Plot the n-hop subgraph around cell `center_ind` from region `idx`"""
-    xcoord_ind = dataset.node_feature_names.index('center_coord-x')
-    ycoord_ind = dataset.node_feature_names.index('center_coord-y')
+    xcoord_ind = dataset.node_feature_names.index("center_coord-x")
+    ycoord_ind = dataset.node_feature_names.index("center_coord-y")
 
     _subg = dataset.calculate_subgraph(idx, center_ind)
     coords = _subg.x.data.numpy()[:, [xcoord_ind, ycoord_ind]].astype(float)
@@ -105,35 +103,40 @@ def build_subgraph_for_plotly(dataset, idx, center_ind):
     G = dataset.get_full_nx(idx)
     sub_node_inds = []
     for n in G.nodes:
-        c = np.array(G.nodes[n]['center_coord']).astype(float).reshape((1, -1))
+        c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
         if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
             sub_node_inds.append(n)
     assert len(sub_node_inds) == len(coords)
     _G = G.subgraph(sub_node_inds)
 
-    node_colors = {f"{_G.nodes[n]['cell_id']}" : dataset.cell_type_mapping[_G.nodes[n]['cell_type']] for n in _G.nodes}
-    test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]['voronoi_polygon'] for n in _G.nodes}
+    node_colors = {f"{_G.nodes[n]['cell_id']}": dataset.cell_type_mapping[_G.nodes[n]["cell_type"]] for n in _G.nodes}
+    test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
     # color_column = pd.Series(node_colors, index=_G.nodes)
-    color_column = pd.DataFrame.from_dict(node_colors, orient='index', columns=['leiden_res'])
-    color_column = color_column['leiden_res']
+    color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
+    color_column = color_column["leiden_res"]
 
     return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
 
 
 if __name__ == "__main__":
-    
     dataset_root = "/data/qd452774/spatial_transcriptomics/data/example_dataset"
     dataset_kwargs = {
-        'transform': [],
-        'pre_transform': None,
-        'raw_folder_name': 'graph',  # os.path.join(dataset_root, "graph") is the folder where we saved nx graphs
-        'processed_folder_name': 'tg_graph',  # processed dataset files will be stored here
-        'node_features': ["cell_type", "volume", "biomarker_expression", "neighborhood_composition", "center_coord"],  # There are all the cellular features that we want the dataset to compute
-        'edge_features': ["edge_type", "distance"],  # edge (cell pair) features
-        'subgraph_size': 3,  # indicating we want to sample 3-hop subgraphs from these regions (for training/inference), this is a core parameter for SPACE-GM.
-        'subgraph_source': 'on-the-fly',
-        'subgraph_allow_distant_edge': True,
-        'subgraph_radius_limit': 400.,
+        "transform": [],
+        "pre_transform": None,
+        "raw_folder_name": "graph",  # os.path.join(dataset_root, "graph") is the folder where we saved nx graphs
+        "processed_folder_name": "tg_graph",  # processed dataset files will be stored here
+        "node_features": [
+            "cell_type",
+            "volume",
+            "biomarker_expression",
+            "neighborhood_composition",
+            "center_coord",
+        ],  # There are all the cellular features that we want the dataset to compute
+        "edge_features": ["edge_type", "distance"],  # edge (cell pair) features
+        "subgraph_size": 3,  # indicating we want to sample 3-hop subgraphs from these regions (for training/inference), this is a core parameter for SPACE-GM.
+        "subgraph_source": "on-the-fly",
+        "subgraph_allow_distant_edge": True,
+        "subgraph_radius_limit": 400.0,
     }
 
     feature_kwargs = {
@@ -143,7 +146,6 @@ if __name__ == "__main__":
         "neighborhood_size": 10,
     }
     dataset_kwargs.update(feature_kwargs)
-
 
     logger.info("Loading CellularGraphDataset for the following comfig...")
     logger.info(dataset_kwargs)

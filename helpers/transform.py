@@ -5,14 +5,12 @@ import torch
 
 
 class FeatureMask(object):
-    """ Transformer object for masking features """
-    def __init__(self,
-                 dataset,
-                 use_neighbor_node_features=None,
-                 use_center_node_features=None,
-                 use_edge_features=None,
-                 **kwargs):
-        """ Construct the transformer
+    """Transformer object for masking features"""
+
+    def __init__(
+        self, dataset, use_neighbor_node_features=None, use_center_node_features=None, use_edge_features=None, **kwargs
+    ):
+        """Construct the transformer
 
         Args:
             dataset (CellularGraphDataset): dataset object
@@ -27,24 +25,29 @@ class FeatureMask(object):
         self.node_feature_names = dataset.node_feature_names
         self.edge_feature_names = dataset.edge_feature_names
 
-        self.use_neighbor_node_features = use_neighbor_node_features if \
-            use_neighbor_node_features is not None else dataset.node_features
-        self.use_center_node_features = use_center_node_features if \
-            use_center_node_features is not None else dataset.node_features
-        self.use_edge_features = use_edge_features if \
-            use_edge_features is not None else dataset.edge_features
+        self.use_neighbor_node_features = (
+            use_neighbor_node_features if use_neighbor_node_features is not None else dataset.node_features
+        )
+        self.use_center_node_features = (
+            use_center_node_features if use_center_node_features is not None else dataset.node_features
+        )
+        self.use_edge_features = use_edge_features if use_edge_features is not None else dataset.edge_features
 
         self.center_node_feature_masks = [
-            1 if any(name.startswith(feat) for feat in self.use_center_node_features)
-            else 0 for name in self.node_feature_names]
+            1 if any(name.startswith(feat) for feat in self.use_center_node_features) else 0
+            for name in self.node_feature_names
+        ]
         self.neighbor_node_feature_masks = [
-            1 if any(name.startswith(feat) for feat in self.use_neighbor_node_features)
-            else 0 for name in self.node_feature_names]
+            1 if any(name.startswith(feat) for feat in self.use_neighbor_node_features) else 0
+            for name in self.node_feature_names
+        ]
 
-        self.center_node_feature_masks = \
-            torch.from_numpy(np.array(self.center_node_feature_masks).reshape((-1,))).float()
-        self.neighbor_node_feature_masks = \
-            torch.from_numpy(np.array(self.neighbor_node_feature_masks).reshape((1, -1))).float()
+        self.center_node_feature_masks = torch.from_numpy(
+            np.array(self.center_node_feature_masks).reshape((-1,))
+        ).float()
+        self.neighbor_node_feature_masks = torch.from_numpy(
+            np.array(self.neighbor_node_feature_masks).reshape((1, -1))
+        ).float()
 
     def __call__(self, data):
         data = deepcopy(data)
@@ -73,16 +76,18 @@ class FeatureMask(object):
 
 class AddCenterCellType(object):
     """Transformer for center cell type prediction"""
+
     def __init__(self, dataset, **kwargs):
         self.node_feature_names = dataset.node_feature_names
-        self.cell_type_feat = self.node_feature_names.index('cell_type')
+        self.cell_type_feat = self.node_feature_names.index("cell_type")
         # Assign a placeholder cell type for the center node
         self.placeholder_cell_type = max(dataset.cell_type_mapping.values()) + 1
 
     def __call__(self, data):
         data = deepcopy(data)
-        assert "center_node_index" in data, \
-            "Only subgraphs with center nodes are supported, cannot find `center_node_index`"
+        assert (
+            "center_node_index" in data
+        ), "Only subgraphs with center nodes are supported, cannot find `center_node_index`"
         center_node_feat = data.x[data.center_node_index].detach().clone()
         center_cell_type = center_node_feat[self.cell_type_feat]
         data.node_y = center_cell_type.long().view((1,))
@@ -92,15 +97,17 @@ class AddCenterCellType(object):
 
 class AddCenterCellBiomarkerExpression(object):
     """Transformer for center cell biomarker expression prediction"""
+
     def __init__(self, dataset, **kwargs):
         self.node_feature_names = dataset.node_feature_names
-        self.bm_exp_feat = np.array([
-            i for i, feat in enumerate(self.node_feature_names)
-            if feat.startswith('biomarker_expression')])
+        self.bm_exp_feat = np.array(
+            [i for i, feat in enumerate(self.node_feature_names) if feat.startswith("biomarker_expression")]
+        )
 
     def __call__(self, data):
-        assert "center_node_index" in data, \
-            "Only subgraphs with center nodes are supported, cannot find `center_node_index`"
+        assert (
+            "center_node_index" in data
+        ), "Only subgraphs with center nodes are supported, cannot find `center_node_index`"
         center_node_feat = data.x[data.center_node_index].detach().clone()
         center_cell_exp = center_node_feat[self.bm_exp_feat].float()
         data.node_y = center_cell_exp.view(1, -1)
@@ -111,22 +118,25 @@ class AddCenterCellIdentifier(object):
     """Transformer for adding another feature column for identifying center cell
     Helpful when predicting node-level tasks.
     """
+
     def __init__(self, *args, **kwargs):
         pass
 
     def __call__(self, data):
-        assert "center_node_index" in data, \
-            "Only subgraphs with center nodes are supported, cannot find `center_node_index`"
+        assert (
+            "center_node_index" in data
+        ), "Only subgraphs with center nodes are supported, cannot find `center_node_index`"
         center_cell_identifier_column = torch.zeros((data.x.shape[0], 1), dtype=data.x.dtype)
-        center_cell_identifier_column[data.center_node_index, 0] = 1.
+        center_cell_identifier_column[data.center_node_index, 0] = 1.0
         data.x = torch.cat([data.x, center_cell_identifier_column], dim=1)
         return data
 
 
 class AddGraphLabel(object):
     """Transformer for adding graph-level task labels"""
+
     def __init__(self, graph_label_file, tasks=[], **kwargs):
-        """ Construct the transformer
+        """Construct the transformer
 
         Args:
             graph_label_file (str): path to the csv file containing graph-level

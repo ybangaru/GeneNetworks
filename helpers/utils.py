@@ -31,25 +31,24 @@ def get_cell_type_metadata(nx_graph_files):
         nx_graph_files = [nx_graph_files]
 
     directory_path = os.path.dirname(os.path.dirname(nx_graph_files[0]))
-    cell_type_mapping_path = os.path.join(directory_path, 'cell_type_mapping.json')
-    cell_type_freq_path = os.path.join(directory_path, 'cell_type_freq.json')
-    cell_annotation_frequencies_path = os.path.join(directory_path,'cell_annotation_freq.json')
+    cell_type_mapping_path = os.path.join(directory_path, "cell_type_mapping.json")
+    cell_type_freq_path = os.path.join(directory_path, "cell_type_freq.json")
+    cell_annotation_frequencies_path = os.path.join(directory_path, "cell_annotation_freq.json")
 
     try:
         cell_type_mapping = json.load(open(cell_type_mapping_path))
         cell_type_freq = json.load(open(cell_type_freq_path))
         sorted_cell_annotation_freq = json.load(open(cell_annotation_frequencies_path))
-    
-    except FileNotFoundError:
 
+    except FileNotFoundError:
         cell_type_mapping = {}
         cell_annotation_frequencies = {}
         for g_f in nx_graph_files:
-            G = pickle.load(open(g_f, 'rb'))
+            G = pickle.load(open(g_f, "rb"))
 
-            assert 'cell_type' in G.nodes[0]
+            assert "cell_type" in G.nodes[0]
             for n in G.nodes:
-                ct = G.nodes[n]['cell_type']
+                ct = G.nodes[n]["cell_type"]
                 if ct not in cell_type_mapping:
                     cell_type_mapping[ct] = 0
                 cell_type_mapping[ct] += 1
@@ -65,14 +64,19 @@ def get_cell_type_metadata(nx_graph_files):
         cell_type_mapping = {ct: i for i, ct in enumerate(unique_cell_types)}
         cell_type_freq = dict(zip(unique_cell_types, unique_cell_type_freq))
 
-        cell_annotation_frequencies = {item: cell_annotation_frequencies[item]/sum(cell_annotation_frequencies.values()) for item in cell_annotation_frequencies}
-        sorted_cell_annotation_freq = dict(sorted(cell_annotation_frequencies.items(), key=lambda item: item[1], reverse=True))
+        cell_annotation_frequencies = {
+            item: cell_annotation_frequencies[item] / sum(cell_annotation_frequencies.values())
+            for item in cell_annotation_frequencies
+        }
+        sorted_cell_annotation_freq = dict(
+            sorted(cell_annotation_frequencies.items(), key=lambda item: item[1], reverse=True)
+        )
 
-        with open(cell_type_mapping_path, 'w') as json_file:
+        with open(cell_type_mapping_path, "w") as json_file:
             json.dump(cell_type_mapping, json_file, indent=2)
-        with open(cell_type_freq_path, 'w') as json_file:
+        with open(cell_type_freq_path, "w") as json_file:
             json.dump(cell_type_freq, json_file, indent=2)
-        with open(cell_annotation_frequencies_path, 'w') as json_file:
+        with open(cell_annotation_frequencies_path, "w") as json_file:
             json.dump(sorted_cell_annotation_freq, json_file, indent=2)
 
     return cell_type_mapping, cell_type_freq, sorted_cell_annotation_freq
@@ -93,25 +97,22 @@ def get_biomarker_metadata(nx_graph_files, file_loc=None):
     all_bms = set()
     shared_bms = None
     for g_f in nx_graph_files:
-        G = pickle.load(open(g_f, 'rb'))
+        G = pickle.load(open(g_f, "rb"))
         for n in G.nodes:
             bms = sorted(G.nodes[n]["biomarker_expression"].keys())
             for bm in bms:
                 all_bms.add(bm)
             valid_bms = [
-                bm for bm in bms if G.nodes[n]["biomarker_expression"][bm] == G.nodes[n]["biomarker_expression"][bm]]
+                bm for bm in bms if G.nodes[n]["biomarker_expression"][bm] == G.nodes[n]["biomarker_expression"][bm]
+            ]
             shared_bms = set(valid_bms) if shared_bms is None else shared_bms & set(valid_bms)
     shared_bms = sorted(shared_bms)
     all_bms = sorted(all_bms)
     return shared_bms, all_bms
 
 
-def get_graph_splits(dataset,
-                     split='random',
-                     cv_k=5,
-                     seed=None,
-                     fold_mapping=None):
-    """ Define train/valid split
+def get_graph_splits(dataset, split="random", cv_k=5, seed=None, fold_mapping=None):
+    """Define train/valid split
 
     Args:
         dataset (CellularGraphDataset): dataset to split
@@ -127,7 +128,7 @@ def get_graph_splits(dataset,
     splits = {}
     region_ids = set([dataset.get_full(i).region_id for i in range(dataset.N)])
     _region_ids = sorted(region_ids)
-    if split == 'random':
+    if split == "random":
         if seed is not None:
             np.random.seed(seed)
         if fold_mapping is None:
@@ -138,7 +139,7 @@ def get_graph_splits(dataset,
         cv_shard_size = len(_folds) / cv_k
         for i, region_id in enumerate(_region_ids):
             splits[region_id] = _folds.index(fold_mapping[region_id]) // cv_shard_size
-    elif split == 'fold':
+    elif split == "fold":
         # Split into folds, one fold per group
         assert fold_mapping is not None
         _folds = sorted(set(list(fold_mapping.values())))

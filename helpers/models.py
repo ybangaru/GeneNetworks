@@ -28,14 +28,14 @@ class GINConv(MessagePassing):
 
     See https://arxiv.org/abs/1810.00826
     """
+
     def __init__(self, emb_dim, aggr="add"):
         super(GINConv, self).__init__()
 
         # Multi-layer perceptron
         self.mlp = torch.nn.Sequential(
-            torch.nn.Linear(emb_dim, 2 * emb_dim),
-            torch.nn.ReLU(),
-            torch.nn.Linear(2 * emb_dim, emb_dim))
+            torch.nn.Linear(emb_dim, 2 * emb_dim), torch.nn.ReLU(), torch.nn.Linear(2 * emb_dim, emb_dim)
+        )
         self.edge_embedding = torch.nn.Embedding(NUM_EDGE_TYPE, emb_dim)
 
         torch.nn.init.xavier_uniform_(self.edge_embedding.weight.data)
@@ -53,7 +53,7 @@ class GINConv(MessagePassing):
 
         # Note that the first feature of "edge_attr" should always be edge type
         # Pairwise distances are not used
-        edge_embeddings = self.edge_embedding(edge_attr[:, 0].long())  
+        edge_embeddings = self.edge_embedding(edge_attr[:, 0].long())
         return self.propagate(edge_index, x=x, edge_attr=edge_embeddings)
 
     def message(self, x_j, edge_attr):
@@ -76,13 +76,11 @@ class GCNConv(MessagePassing):
 
     def norm(self, edge_index, num_nodes, dtype):
         # assuming that self-loops have been already added in edge_index
-        edge_weight = torch.ones((edge_index.size(1),),
-                                 dtype=dtype,
-                                 device=edge_index.device)
+        edge_weight = torch.ones((edge_index.size(1),), dtype=dtype, device=edge_index.device)
         row, col = edge_index
         deg = scatter_add(edge_weight, row, dim=0, dim_size=num_nodes)
         deg_inv_sqrt = deg.pow(-0.5)
-        deg_inv_sqrt[deg_inv_sqrt == float('inf')] = 0
+        deg_inv_sqrt[deg_inv_sqrt == float("inf")] = 0
 
         return deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
@@ -212,14 +210,17 @@ class GNN(torch.nn.Module):
     Output:
         node representations
     """
-    def __init__(self,
-                 num_layer=3,
-                 num_node_type=NUM_NODE_TYPE,
-                 num_feat=38,
-                 emb_dim=256,
-                 node_embedding_output="last",
-                 drop_ratio=0,
-                 gnn_type="gin"):
+
+    def __init__(
+        self,
+        num_layer=3,
+        num_node_type=NUM_NODE_TYPE,
+        num_feat=38,
+        emb_dim=256,
+        node_embedding_output="last",
+        drop_ratio=0,
+        gnn_type="gin",
+    ):
         super(GNN, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
@@ -313,19 +314,22 @@ class GNN_pred(torch.nn.Module):
     See https://arxiv.org/abs/1810.00826
     JK-net: https://arxiv.org/abs/1806.03536
     """
-    def __init__(self,
-                 num_layer=2,
-                 num_node_type=NUM_NODE_TYPE,
-                 num_feat=38,
-                 emb_dim=256,
-                 num_additional_feat=0,
-                 num_node_tasks=15,
-                 num_graph_tasks=2,
-                 node_embedding_output="last",
-                 drop_ratio=0,
-                 graph_pooling="mean",
-                 gnn_type="gin",
-                 return_node_embedding=False):
+
+    def __init__(
+        self,
+        num_layer=2,
+        num_node_type=NUM_NODE_TYPE,
+        num_feat=38,
+        emb_dim=256,
+        num_additional_feat=0,
+        num_node_tasks=15,
+        num_graph_tasks=2,
+        node_embedding_output="last",
+        drop_ratio=0,
+        graph_pooling="mean",
+        gnn_type="gin",
+        return_node_embedding=False,
+    ):
         super(GNN_pred, self).__init__()
         self.drop_ratio = drop_ratio
         self.emb_dim = emb_dim
@@ -333,13 +337,15 @@ class GNN_pred(torch.nn.Module):
         self.num_graph_tasks = num_graph_tasks
         self.return_node_embedding = return_node_embedding
 
-        self.gnn = GNN(num_layer,
-                       num_node_type,
-                       num_feat,
-                       emb_dim,
-                       node_embedding_output=node_embedding_output,
-                       drop_ratio=drop_ratio,
-                       gnn_type=gnn_type)
+        self.gnn = GNN(
+            num_layer,
+            num_node_type,
+            num_feat,
+            emb_dim,
+            node_embedding_output=node_embedding_output,
+            drop_ratio=drop_ratio,
+            gnn_type=gnn_type,
+        )
 
         # Different kind of graph pooling
         if graph_pooling == "sum":
@@ -367,7 +373,7 @@ class GNN_pred(torch.nn.Module):
         if graph_pooling[:-1] == "set2set":
             self.mult *= 2
         if node_embedding_output == "concat":
-            self.mult *= (self.num_layer + 1)
+            self.mult *= self.num_layer + 1
 
         node_embedding_dim = self.mult * self.emb_dim
         if self.num_graph_tasks > 0:
@@ -376,7 +382,8 @@ class GNN_pred(torch.nn.Module):
                 torch.nn.LeakyReLU(),
                 torch.nn.Linear(node_embedding_dim, node_embedding_dim),
                 torch.nn.LeakyReLU(),
-                torch.nn.Linear(node_embedding_dim, self.num_graph_tasks))
+                torch.nn.Linear(node_embedding_dim, self.num_graph_tasks),
+            )
 
         if self.num_node_tasks > 0:
             self.node_pred_module = torch.nn.Sequential(
@@ -384,7 +391,8 @@ class GNN_pred(torch.nn.Module):
                 torch.nn.LeakyReLU(),
                 torch.nn.Linear(node_embedding_dim, node_embedding_dim),
                 torch.nn.LeakyReLU(),
-                torch.nn.Linear(node_embedding_dim, self.num_node_tasks))
+                torch.nn.Linear(node_embedding_dim, self.num_node_tasks),
+            )
 
     def from_pretrained(self, model_file, strict_bool):
         self.gnn.load_state_dict(torch.load(model_file), strict=strict_bool)
@@ -394,20 +402,21 @@ class GNN_pred(torch.nn.Module):
         if node_feat_mask is not None:
             assert node_feat_mask.shape[0] == data.x.shape[0]
             gnn_args.append(node_feat_mask.to(data.x.device))
-        batch = data.batch if 'batch' in data else torch.zeros((len(data.x),)).long().to(data.x.device)
+        batch = data.batch if "batch" in data else torch.zeros((len(data.x),)).long().to(data.x.device)
 
         node_representation = self.gnn(*gnn_args)
-        if 'additional_feat' in data:
+        if "additional_feat" in data:
             additional_feat = data.additional_feat[batch]
             node_representation = torch.cat([node_representation, additional_feat], 1)
 
         return_vals = []
         if self.num_node_tasks > 0:
-            if 'center_node_index' not in data:
+            if "center_node_index" not in data:
                 node_pred = self.node_pred_module(node_representation)
             else:
-                center_node_index = [data.center_node_index] if \
-                    isinstance(data.center_node_index, int) else data.center_node_index
+                center_node_index = (
+                    [data.center_node_index] if isinstance(data.center_node_index, int) else data.center_node_index
+                )
                 center_node_rep = node_representation[center_node_index]
                 node_pred = self.node_pred_module(center_node_rep)
             return_vals.append(node_pred)
@@ -422,9 +431,10 @@ class GNN_pred(torch.nn.Module):
 # Loss functions
 class BinaryCrossEntropy(torch.nn.Module):
     """Weighted binary cross entropy loss function"""
+
     def __init__(self, **kwargs):
         super(BinaryCrossEntropy, self).__init__(**kwargs)
-        self.loss_fn = torch.nn.BCEWithLogitsLoss(reduction='none')
+        self.loss_fn = torch.nn.BCEWithLogitsLoss(reduction="none")
 
     def forward(self, y_pred, y, w):
         return (self.loss_fn(y_pred, y) * w).mean()
@@ -432,6 +442,7 @@ class BinaryCrossEntropy(torch.nn.Module):
 
 class CoxSGDLossFn(torch.nn.Module):
     """Cox SGD loss function"""
+
     def __init__(self, top_n=2, regularizer_weight=0.05, **kwargs):
         self.top_n = top_n
         self.regularizer_weight = regularizer_weight
@@ -451,7 +462,7 @@ class CoxSGDLossFn(torch.nn.Module):
         valid_sample_is = torch.nonzero(pair_mat.sum(1)).flatten()
         pair_mat[(valid_sample_is, valid_sample_is)] = 1
 
-        score_diff = (y_pred.reshape((1, -1)) - y_pred.reshape((-1, 1)))
+        score_diff = y_pred.reshape((1, -1)) - y_pred.reshape((-1, 1))
         score_diff_row_max = torch.max(score_diff, axis=1, keepdims=True).values
         loss = (torch.exp(score_diff - score_diff_row_max) * pair_mat).sum(1)
         loss = (score_diff_row_max[:, 0][valid_sample_is] + torch.log(loss[valid_sample_is])).sum()
@@ -463,18 +474,19 @@ class CoxSGDLossFn(torch.nn.Module):
 
 # Baseline methods - sklearn style
 class MLP_pred(object):
-    def __init__(self,
-                 n_feat=None,
-                 n_layers=3,
-                 n_hidden=256,
-                 n_tasks=None,
-                 gpu=False,
-                 task='classification',  # classification or cox
-                 balanced=True,  # used for classification loss
-                 top_n=0,  # used for cox regression loss
-                 regularizer_weight=0.005,
-                 **kwargs):
-
+    def __init__(
+        self,
+        n_feat=None,
+        n_layers=3,
+        n_hidden=256,
+        n_tasks=None,
+        gpu=False,
+        task="classification",  # classification or cox
+        balanced=True,  # used for classification loss
+        top_n=0,  # used for cox regression loss
+        regularizer_weight=0.005,
+        **kwargs
+    ):
         self.n_feat = n_feat
         self.n_layers = n_layers
         self.n_hidden = n_hidden
@@ -521,10 +533,10 @@ class MLP_pred(object):
         self.model.zero_grad()
         self.model.train()
 
-        if self.task == 'classification':
+        if self.task == "classification":
             pos_weight = (1 - y.mean(0)) / y.mean(0) if self.balanced else np.ones((y.shape[1],))
             self.loss_fn = torch.nn.BCEWithLogitsLoss(torch.from_numpy(pos_weight).float())
-        elif self.task == 'cox':
+        elif self.task == "cox":
             self.loss_fn = CoxSGDLossFn(top_n=self.top_n, regularizer_weight=self.regularizer_weight)
         else:
             raise ValueError("Task type unknown")
@@ -535,9 +547,9 @@ class MLP_pred(object):
                 if self.gpu:
                     batch = [item.cuda() for item in batch]
                 y_pred = self.model(batch[0])
-                if self.task == 'classification':
+                if self.task == "classification":
                     loss = self.loss_fn(y_pred, batch[1])
-                elif self.task == 'cox':
+                elif self.task == "cox":
                     loss = self.loss_fn(y_pred, batch[1], batch[2])
 
                 loss.backward()

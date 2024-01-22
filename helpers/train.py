@@ -18,27 +18,29 @@ from .inference import collect_predict_for_all_nodes, collect_predict_by_random_
 from helpers import MLFLOW_CLIENT, logger
 
 
-def train_subgraph(model,
-                   dataset,
-                   device,
-                   node_task_loss_fn=None,
-                   graph_task_loss_fn=None,
-                   train_inds=None,
-                   valid_inds=None,
-                   num_iterations=1e5,
-                   num_regions_per_segment=0,
-                   num_iterations_per_segment=1e4,
-                   num_workers=0,
-                   evaluate_freq=1e4,
-                   evaluate_fn=[],
-                   evaluate_on_train=True,
-                   batch_size=64,
-                   lr=0.001,
-                   graph_loss_weight=1.,
-                   dataset_kwargs={},
-                   embedding_log_freq=100_000,
-                   **kwargs):
-    """ Train a GNN model through sampling subgraphs
+def train_subgraph(
+    model,
+    dataset,
+    device,
+    node_task_loss_fn=None,
+    graph_task_loss_fn=None,
+    train_inds=None,
+    valid_inds=None,
+    num_iterations=1e5,
+    num_regions_per_segment=0,
+    num_iterations_per_segment=1e4,
+    num_workers=0,
+    evaluate_freq=1e4,
+    evaluate_fn=[],
+    evaluate_on_train=True,
+    batch_size=64,
+    lr=0.001,
+    graph_loss_weight=1.0,
+    dataset_kwargs={},
+    embedding_log_freq=100_000,
+    **kwargs,
+):
+    """Train a GNN model through sampling subgraphs
 
     Args:
         model (nn.Module): pytorch model
@@ -64,17 +66,17 @@ def train_subgraph(model,
         **kwargs: additional arguments for callback functions
     """
 
-    mlflow.set_experiment(kwargs['experiment_name'])
+    mlflow.set_experiment(kwargs["experiment_name"])
 
-    with mlflow.start_run(run_name=kwargs['run_name']) as run:
-
-        directory_run = f"/data/qd452774/spatial_transcriptomics/mlruns/{run.info.experiment_id}/{run.info.run_id}/artifacts"
+    with mlflow.start_run(run_name=kwargs["run_name"]) as run:
+        directory_run = (
+            f"/data/qd452774/spatial_transcriptomics/mlruns/{run.info.experiment_id}/{run.info.run_id}/artifacts"
+        )
         for item in ["embeddings", "node_probs", "node_class", "node_class_pred", "model", "scorefile"]:
             if not os.path.exists(f"{directory_run}/{item}"):
                 os.makedirs(f"{directory_run}/{item}")
-        kwargs['model_folder'] = f"{directory_run}/model"
-        kwargs['score_file'] = f"{directory_run}/scorefile/results.txt"
-        
+        kwargs["model_folder"] = f"{directory_run}/model"
+        kwargs["score_file"] = f"{directory_run}/scorefile/results.txt"
 
         for arg, value in dataset_kwargs.items():
             try:
@@ -93,12 +95,12 @@ def train_subgraph(model,
             "num_iterations_per_segment": num_iterations_per_segment,
             "num_workers": num_workers,
             "evaluate_freq": evaluate_freq,
-            "embedding_log_freq" : embedding_log_freq,
+            "embedding_log_freq": embedding_log_freq,
             "evaluate_fn": evaluate_fn,
             "evaluate_on_train": evaluate_on_train,
             "batch_size": batch_size,
             "lr": lr,
-            "graph_loss_weight": graph_loss_weight
+            "graph_loss_weight": graph_loss_weight,
         }
 
         # Log the parameters
@@ -109,8 +111,8 @@ def train_subgraph(model,
             mlflow.log_param(arg, value)
 
         model.zero_grad()
-        best_node_loss_metric_value = float('inf') 
-            
+        best_node_loss_metric_value = float("inf")
+
         model = model.to(device)
         model.train()
         if train_inds is None:
@@ -120,42 +122,42 @@ def train_subgraph(model,
         node_losses = []
         graph_losses = []
 
-        data_iter = SubgraphSampler(dataset,
-                                    selected_inds=train_inds,
-                                    batch_size=batch_size,
-                                    num_regions_per_segment=int(num_regions_per_segment),
-                                    steps_per_segment=int(num_iterations_per_segment),
-                                    num_workers=num_workers)
-        
+        data_iter = SubgraphSampler(
+            dataset,
+            selected_inds=train_inds,
+            batch_size=batch_size,
+            num_regions_per_segment=int(num_regions_per_segment),
+            steps_per_segment=int(num_iterations_per_segment),
+            num_workers=num_workers,
+        )
+
         for i_iter in range(int(num_iterations)):
             batch = next(data_iter)
             batch = batch.to(device)
 
             res = model(batch)
-            loss = 0.
+            loss = 0.0
             if model.num_node_tasks > 0:
-                assert node_task_loss_fn is not None, \
-                    "Please specify `node_task_loss_fn` in the training kwargs"
+                assert node_task_loss_fn is not None, "Please specify `node_task_loss_fn` in the training kwargs"
                 node_y = batch.node_y
                 node_pred = res[0]
-                
+
                 node_loss = node_task_loss_fn(node_pred, node_y)
                 loss += node_loss
-                node_losses.append(node_loss.to('cpu').data.item())
+                node_losses.append(node_loss.to("cpu").data.item())
 
             if model.num_graph_tasks > 0:
-                assert graph_task_loss_fn is not None, \
-                    "Please specify `graph_task_loss_fn` in the training kwargs"
+                assert graph_task_loss_fn is not None, "Please specify `graph_task_loss_fn` in the training kwargs"
                 graph_y, graph_w = batch.graph_y.float(), batch.graph_w.float()
                 graph_pred = res[-1]
                 graph_loss = graph_task_loss_fn(graph_pred, graph_y, graph_w)
                 loss += graph_loss * graph_loss_weight
-                graph_losses.append(graph_loss.to('cpu').data.item())
+                graph_losses.append(graph_loss.to("cpu").data.item())
 
             loss.backward()
             optimizer.step()
             model.zero_grad()
-                
+
             # Log embeddings
             if i_iter > 0 and i_iter % embedding_log_freq == 0:
                 embeddings = model.gnn.x_embedding.weight.detach().cpu().numpy()
@@ -202,7 +204,7 @@ def train_subgraph(model,
                         valid_inds=valid_inds,
                         batch_size=batch_size,
                         num_workers=num_workers,
-                        **kwargs
+                        **kwargs,
                     )
                     graph_type, *_rest_test_valid = result_list
                     dataset_type, _, avg_pred, top1_acc, top3_acc, top5_acc, *_rest_valid = _rest_test_valid
@@ -213,25 +215,27 @@ def train_subgraph(model,
                     mlflow.log_metric(f"{graph_type}-{dataset_type}-top5_acc", top5_acc, step=i_iter)
 
                     if _rest_valid:
-
                         dataset_type, _, avg_pred, top1_acc, top3_acc, top5_acc = _rest_valid
                         mlflow.log_metric(f"{graph_type}-{dataset_type}-avg_pred", avg_pred, step=i_iter)
                         mlflow.log_metric(f"{graph_type}-{dataset_type}-top1_acc", top1_acc, step=i_iter)
                         mlflow.log_metric(f"{graph_type}-{dataset_type}-top3_acc", top3_acc, step=i_iter)
-                        mlflow.log_metric(f"{graph_type}-{dataset_type}-top5_acc", top5_acc, step=i_iter)        
+                        mlflow.log_metric(f"{graph_type}-{dataset_type}-top5_acc", top5_acc, step=i_iter)
 
-                for fn in kwargs['model_save_fn']:
-                    current_metric_value = np.mean(node_losses[-100:]) if len(node_losses) > 100 else np.mean(node_losses[:])
-                    fn(model,
+                for fn in kwargs["model_save_fn"]:
+                    current_metric_value = (
+                        np.mean(node_losses[-100:]) if len(node_losses) > 100 else np.mean(node_losses[:])
+                    )
+                    fn(
+                        model,
                         dataset,
                         device,
                         best_model_metric="train_node_loss",
                         best_model_metric_value=best_node_loss_metric_value,
-                        current_metric_value=current_metric_value,                        
-                        **kwargs
-                        )
+                        current_metric_value=current_metric_value,
+                        **kwargs,
+                    )
                     if current_metric_value < best_node_loss_metric_value:
-                        best_node_loss_metric_value = current_metric_value                        
+                        best_node_loss_metric_value = current_metric_value
 
                 model.train()
         dataset.set_indices(np.arange(dataset.N))
@@ -239,19 +243,21 @@ def train_subgraph(model,
 
 
 # %% Callback functions for evaluation
-def evaluate_by_sampling_subgraphs(model,
-                                   dataset,
-                                   device,
-                                   train_inds=None,
-                                   valid_inds=None,
-                                   batch_size=64,
-                                   node_task_evaluate_fn=None,
-                                   graph_task_evaluate_fn=None,
-                                   num_eval_iterations=300,
-                                   num_workers=0,
-                                   score_file=None,
-                                   **kwargs):
-    """ Callback function for evaluating GNN predictions on randomly sampled subgraphs
+def evaluate_by_sampling_subgraphs(
+    model,
+    dataset,
+    device,
+    train_inds=None,
+    valid_inds=None,
+    batch_size=64,
+    node_task_evaluate_fn=None,
+    graph_task_evaluate_fn=None,
+    num_eval_iterations=300,
+    num_workers=0,
+    score_file=None,
+    **kwargs,
+):
+    """Callback function for evaluating GNN predictions on randomly sampled subgraphs
 
     This evaluation callback fn will randomly sample some batches of subgraphs from the dataset,
     and evaluate metrics based on these subgraphs. For graph-level tasks, the evaluation is
@@ -283,67 +289,71 @@ def evaluate_by_sampling_subgraphs(model,
         # Evaluate on subgraphs sampled from training samples
         score_row.append("Train")
         # Collect predictions by randomly sampling subgraphs
-        node_preds, node_labels, graph_preds, graph_ys, graph_ws = \
-            collect_predict_by_random_sample(model, dataset, device,
-                                             inds=train_inds,
-                                             batch_size=batch_size,
-                                             num_eval_iterations=num_eval_iterations,
-                                             num_workers=num_workers,
-                                             **kwargs)
+        node_preds, node_labels, graph_preds, graph_ys, graph_ws = collect_predict_by_random_sample(
+            model,
+            dataset,
+            device,
+            inds=train_inds,
+            batch_size=batch_size,
+            num_eval_iterations=num_eval_iterations,
+            num_workers=num_workers,
+            **kwargs,
+        )
         if len(node_preds) > 0:
             # Evalaute node-level predictions
-            assert node_task_evaluate_fn is not None, \
-                "Please specify `node_task_evaluate_fn` in the training kwargs"
+            assert node_task_evaluate_fn is not None, "Please specify `node_task_evaluate_fn` in the training kwargs"
             score_row.append("node-score")
             score_row.extend(node_task_evaluate_fn(node_preds, node_labels, print_res=False))
 
         if len(graph_preds) > 0:
             # Evaluate graph-level predictions
-            assert graph_task_evaluate_fn is not None, \
-                "Please specify `graph_task_evaluate_fn` in the training kwargs"
+            assert graph_task_evaluate_fn is not None, "Please specify `graph_task_evaluate_fn` in the training kwargs"
             score_row.append("graph-score")
             score_row.extend(graph_task_evaluate_fn(graph_preds, graph_ys, graph_ws, print_res=False))
     if valid_inds is not None:
         # Same for validation samples
         score_row.append("Valid")
-        node_preds, node_labels, graph_preds, graph_ys, graph_ws = \
-            collect_predict_by_random_sample(model, dataset, device,
-                                             inds=valid_inds,
-                                             batch_size=batch_size,
-                                             num_eval_iterations=num_eval_iterations,
-                                             num_workers=num_workers,
-                                             **kwargs)
+        node_preds, node_labels, graph_preds, graph_ys, graph_ws = collect_predict_by_random_sample(
+            model,
+            dataset,
+            device,
+            inds=valid_inds,
+            batch_size=batch_size,
+            num_eval_iterations=num_eval_iterations,
+            num_workers=num_workers,
+            **kwargs,
+        )
         if len(node_preds) > 0:
-            assert node_task_evaluate_fn is not None, \
-                "Please specify `node_task_evaluate_fn` in the training kwargs"
+            assert node_task_evaluate_fn is not None, "Please specify `node_task_evaluate_fn` in the training kwargs"
             score_row.append("node-score")
             score_row.extend(node_task_evaluate_fn(node_preds, node_labels, print_res=False))
 
         if len(graph_preds) > 0:
-            assert graph_task_evaluate_fn is not None, \
-                "Please specify `graph_task_evaluate_fn` in the training kwargs"
+            assert graph_task_evaluate_fn is not None, "Please specify `graph_task_evaluate_fn` in the training kwargs"
             score_row.append("graph-score")
             score_row.extend(graph_task_evaluate_fn(graph_preds, graph_ys, graph_ws, print_res=False))
 
     if score_file is not None:
-        with open(score_file, 'a') as f:
-            f.write(",".join([s if isinstance(s, str) else ("%.3f" % s) for s in score_row]) + '\n')
+        with open(score_file, "a") as f:
+            f.write(",".join([s if isinstance(s, str) else ("%.3f" % s) for s in score_row]) + "\n")
     return score_row
 
 
-def evaluate_by_full_graph(model,
-                           dataset,
-                           device,
-                           train_inds=None,
-                           valid_inds=None,
-                           batch_size=64,
-                           shuffle=True,
-                           subsample_ratio=0.2,
-                           full_graph_node_task_evaluate_fn=None,
-                           full_graph_graph_task_evaluate_fn=None,
-                           score_file=None,
-                           **kwargs):
-    """ Callback function for evaluating GNN predictions on regions (full cellular graphs)
+def evaluate_by_full_graph(
+    model,
+    dataset,
+    device,
+    train_inds=None,
+    valid_inds=None,
+    batch_size=64,
+    shuffle=True,
+    subsample_ratio=0.2,
+    full_graph_node_task_evaluate_fn=None,
+    full_graph_graph_task_evaluate_fn=None,
+    score_file=None,
+    **kwargs,
+):
+    """Callback function for evaluating GNN predictions on regions (full cellular graphs)
 
     Args:
         model (nn.Module): pytorch model
@@ -378,17 +388,20 @@ def evaluate_by_full_graph(model,
             batch_size=batch_size,
             shuffle=shuffle,
             subsample_ratio=subsample_ratio,
-            **kwargs)
+            **kwargs,
+        )
         if model.num_node_tasks > 0:
             # Evaluate node-level predictions
-            assert full_graph_node_task_evaluate_fn is not None, \
-                "Please specify `full_graph_node_task_evaluate_fn` in the training kwargs"
+            assert (
+                full_graph_node_task_evaluate_fn is not None
+            ), "Please specify `full_graph_node_task_evaluate_fn` in the training kwargs"
             score_row.append("node-score")
             score_row.extend(full_graph_node_task_evaluate_fn(dataset, node_preds, print_res=False))
         if model.num_graph_tasks > 0:
             # Evaluate graph-level predictions
-            assert full_graph_graph_task_evaluate_fn is not None, \
-                "Please specify `full_graph_graph_task_evaluate_fn` in the training kwargs"
+            assert (
+                full_graph_graph_task_evaluate_fn is not None
+            ), "Please specify `full_graph_graph_task_evaluate_fn` in the training kwargs"
             score_row.append("graph-score")
             score_row.extend(full_graph_graph_task_evaluate_fn(dataset, graph_preds, print_res=False))
 
@@ -403,44 +416,45 @@ def evaluate_by_full_graph(model,
             batch_size=batch_size,
             shuffle=shuffle,
             subsample_ratio=subsample_ratio,
-            **kwargs)
+            **kwargs,
+        )
         if model.num_node_tasks > 0:
-            assert full_graph_node_task_evaluate_fn is not None, \
-                "Please specify `full_graph_node_task_evaluate_fn` in the training kwargs"
+            assert (
+                full_graph_node_task_evaluate_fn is not None
+            ), "Please specify `full_graph_node_task_evaluate_fn` in the training kwargs"
             score_row.append("node-score")
             score_row.extend(full_graph_node_task_evaluate_fn(dataset, node_preds, print_res=False))
         if model.num_graph_tasks > 0:
-            assert full_graph_graph_task_evaluate_fn is not None, \
-                "Please specify `full_graph_graph_task_evaluate_fn` in the training kwargs"
+            assert (
+                full_graph_graph_task_evaluate_fn is not None
+            ), "Please specify `full_graph_graph_task_evaluate_fn` in the training kwargs"
             score_row.append("graph-score")
             score_row.extend(full_graph_graph_task_evaluate_fn(dataset, graph_preds, print_res=False))
 
     if score_file is not None:
-        with open(score_file, 'a') as f:
-            f.write(",".join([s if isinstance(s, str) else ("%.3f" % s) for s in score_row]) + '\n')
+        with open(score_file, "a") as f:
+            f.write(",".join([s if isinstance(s, str) else ("%.3f" % s) for s in score_row]) + "\n")
     return score_row
 
 
-def save_model_weight(model,
-                      dataset,
-                      device,
-                      model_folder=None,
-                      **kwargs):
+def save_model_weight(model, dataset, device, model_folder=None, **kwargs):
     if model_folder is not None:
         os.makedirs(model_folder, exist_ok=True)
-        fs = [f for f in os.listdir(model_folder) if f.startswith('model_save')]
-        torch.save(model.state_dict(), os.path.join(model_folder, 'model_save_%d.pt' % len(fs)))
+        fs = [f for f in os.listdir(model_folder) if f.startswith("model_save")]
+        torch.save(model.state_dict(), os.path.join(model_folder, "model_save_%d.pt" % len(fs)))
     return
 
 
-def save_models_best_latest(model,
-                      dataset,
-                      device,
-                      model_folder=None,
-                      best_model_metric=None,
-                      best_model_metric_value=None,
-                      current_metric_value=None,
-                      **kwargs):
+def save_models_best_latest(
+    model,
+    dataset,
+    device,
+    model_folder=None,
+    best_model_metric=None,
+    best_model_metric_value=None,
+    current_metric_value=None,
+    **kwargs,
+):
     """
     Save the latest model and update the best model based on a specified metric.
 
@@ -461,14 +475,11 @@ def save_models_best_latest(model,
         os.makedirs(model_folder, exist_ok=True)
 
         # Save the latest model
-        torch.save(model.state_dict(), os.path.join(model_folder, 'latest_model.pt'))
+        torch.save(model.state_dict(), os.path.join(model_folder, "latest_model.pt"))
 
         # Update the best model if a metric is specified
         if best_model_metric is not None:
-            if (
-                best_model_metric_value is None
-                or current_metric_value < best_model_metric_value
-            ):
-                torch.save(model.state_dict(), os.path.join(model_folder, 'best_model.pt'))
+            if best_model_metric_value is None or current_metric_value < best_model_metric_value:
+                torch.save(model.state_dict(), os.path.join(model_folder, "best_model.pt"))
 
     return

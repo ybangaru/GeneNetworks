@@ -17,12 +17,7 @@ from torch_geometric.data import Batch
 from .data import SubgraphSampler
 
 
-def get_random_sampled_subgraphs(dataset,
-                                 inds=None,
-                                 n_samples=32768,
-                                 batch_size=64,
-                                 num_workers=0,
-                                 seed=123):
+def get_random_sampled_subgraphs(dataset, inds=None, n_samples=32768, batch_size=64, num_workers=0, seed=123):
     """Randomly sample subgraphs from the dataset
 
     Args:
@@ -47,13 +42,15 @@ def get_random_sampled_subgraphs(dataset,
     if inds is None:
         inds = np.arange(dataset.N)
     n_iterations = int(np.ceil(n_samples / batch_size))
-    data_iter = SubgraphSampler(dataset,
-                                selected_inds=inds,
-                                batch_size=batch_size,
-                                num_regions_per_segment=0,
-                                steps_per_segment=n_samples + 1,
-                                num_workers=num_workers,
-                                seed=seed)
+    data_iter = SubgraphSampler(
+        dataset,
+        selected_inds=inds,
+        batch_size=batch_size,
+        num_regions_per_segment=0,
+        steps_per_segment=n_samples + 1,
+        num_workers=num_workers,
+        seed=seed,
+    )
     # Sample subgraphs
     data_list = []
     for _ in range(n_iterations):
@@ -85,12 +82,12 @@ def get_embedding(model, data_list, device, batch_size=64):
         graph_reps = []
         preds = [[], []]
         for i in range(int(num_batches)):
-            batch_data = data_list[i * batch_size:(i + 1) * batch_size]
+            batch_data = data_list[i * batch_size : (i + 1) * batch_size]
             data = Batch.from_data_list(batch_data)
             data = data.to(device)
 
             x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-            batch = data.batch if 'batch' in data else torch.zeros((len(x),)).long().to(x.device)
+            batch = data.batch if "batch" in data else torch.zeros((len(x),)).long().to(x.device)
 
             node_representation = model.gnn(x, edge_index, edge_attr)
             # Center node embedding
@@ -142,12 +139,9 @@ def get_base_adj_mat(data_list):
     return adj_i
 
 
-def dimensionality_reduction_combo(embs,
-                                   n_pca_components=20,
-                                   cluster_method='kmeans',
-                                   n_clusters=10,
-                                   seed=42,
-                                   tool_saves=None):
+def dimensionality_reduction_combo(
+    embs, n_pca_components=20, cluster_method="kmeans", n_clusters=10, seed=42, tool_saves=None
+):
     """Run a combination of dimensionality reduction and clustering
 
     Args:
@@ -176,6 +170,7 @@ def dimensionality_reduction_combo(embs,
 
         try:
             import umap
+
             reducer = umap.UMAP(random_state=seed)
             umap_emb = reducer.fit_transform(pca_embs)
         except Exception as e:
@@ -183,9 +178,9 @@ def dimensionality_reduction_combo(embs,
             reducer = None
             umap_emb = None
 
-        if cluster_method == 'agg':
+        if cluster_method == "agg":
             clustering = AgglomerativeClustering(n_clusters=n_clusters)
-        elif cluster_method == 'kmeans':
+        elif cluster_method == "kmeans":
             clustering = KMeans(n_clusters=n_clusters, random_state=seed)
         else:
             raise NotImplementedError("Clustering method %s not supported" % cluster_method)
@@ -201,13 +196,9 @@ def dimensionality_reduction_combo(embs,
     return pca_embs, umap_emb, cluster_labels, (pca, reducer, clustering)
 
 
-def collect_cluster_label_for_all_nodes(model,
-                                        dataset,
-                                        device,
-                                        tool_saves,
-                                        inds=None,
-                                        embedding_from='graph',
-                                        print_progress=False):
+def collect_cluster_label_for_all_nodes(
+    model, dataset, device, tool_saves, inds=None, embedding_from="graph", print_progress=False
+):
     """Extract all subgraphs from the dataset, calculate their embeddings and
     cluster labels
 
@@ -231,8 +222,10 @@ def collect_cluster_label_for_all_nodes(model,
     dataset.set_indices()
     if inds is None:
         inds = np.arange(dataset.N)
-    assert tool_saves is not None, "Please provide dimensionality reduction " + \
-        "and clustering objects, see `dimensionality_reduction_combo` for details"
+    assert tool_saves is not None, (
+        "Please provide dimensionality reduction "
+        + "and clustering objects, see `dimensionality_reduction_combo` for details"
+    )
 
     def get_num_nodes(dataset, ind):
         return dataset.get_full(ind).num_nodes
@@ -242,7 +235,7 @@ def collect_cluster_label_for_all_nodes(model,
         if print_progress:
             print("Predict on %d" % i)
         dataset.clear_cache()
-        if dataset.subgraph_source == 'chunk_save':
+        if dataset.subgraph_source == "chunk_save":
             dataset.load_to_cache(i, subgraphs=True)
 
         # Collect all subgraphs from the region
@@ -259,9 +252,9 @@ def collect_cluster_label_for_all_nodes(model,
                 keys = list(data_dict.keys())
                 _data_list = [data_dict[k] for k in keys]
                 node_embs, graph_embs, _ = get_embedding(model, _data_list, device)
-                if embedding_from == 'node':
+                if embedding_from == "node":
                     embs = node_embs
-                elif embedding_from == 'graph':
+                elif embedding_from == "graph":
                     embs = graph_embs
                 else:
                     raise ValueError("Embedding from %s not supported" % embedding_from)
@@ -290,7 +283,7 @@ def plot_umap(umap_emb, cluster_labels):
 
 
 def get_biomarker_heatmap_for_cluster(data_list, cluster_labels, data_preds=None):
-    """ Calculate biomarker heatmap for all subgraph clusters
+    """Calculate biomarker heatmap for all subgraph clusters
 
     Args:
         data_list (list): list of subgraphs (as pyg data objects)
@@ -309,7 +302,7 @@ def get_biomarker_heatmap_for_cluster(data_list, cluster_labels, data_preds=None
 
     unique_cluster_labels = sorted(set(cluster_labels))
     heatmap = np.zeros((len(unique_cluster_labels), n_cell_types))
-    
+
     cluster_counts = np.zeros(len(unique_cluster_labels))
     if data_preds is not None:
         assert len(data_preds) == len(data_list)
