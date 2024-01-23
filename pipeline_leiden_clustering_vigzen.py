@@ -1,21 +1,16 @@
 import os
 import ast
-
-
 from joblib import Parallel, delayed
 import mlflow
 import squidpy as sq
-from helpers import spatialPipeline, spatialPreProcessor, logger, VisualizePipeline, ANNOTATION_DICT, NO_JOBS
+from helpers import spatialPipeline, spatialPreProcessor, logger, VisualizePipeline, NO_JOBS
 
-# import plotly
-# plotly.io.kaleido.scope.mathjax= None
-# plotly.io.kaleido.scope.chromium_args += ("--single-process",)
 
 def run_parallel_spatial(filters_list):
     Parallel(n_jobs=NO_JOBS)(delayed(run_pipeline_spatial_clustering)(f) for f in filters_list)
 
-def run_pipeline_spatial_clustering(filters):
 
+def run_pipeline_spatial_clustering(filters):
     logger.info("Running clustering for")
     logger.info(filters)
 
@@ -34,16 +29,14 @@ def run_pipeline_spatial_clustering(filters):
         "find_mt": True,
         "find_rp": True,
         "var_names_make_unique": True,
-        "qc_metrics": dict(
-            qc_vars=["mt", "rp"], percent_top=None, log1p=False, inplace=True
-        ),
+        "qc_metrics": dict(qc_vars=["mt", "rp"], percent_top=None, log1p=False, inplace=True),
         "normalize_totals": dict(target_sum=5_000),
         "log1p_transformation": dict(),
         "scale": dict(zero_center=False),
     }
 
     pca_options = dict(random_state=0, n_comps=220)
-    batch_correction_options = dict(key="sample", adjusted_basis='X_pca')
+    batch_correction_options = dict(key="sample", adjusted_basis="X_pca")
     ng_options = dict(n_neighbors=50, random_state=0)
 
     logger.info(f"{data_filter_name}")
@@ -57,7 +50,6 @@ def run_pipeline_spatial_clustering(filters):
     mlflow.set_experiment(experiment_name)
     run_name_temp = f"{experiment_state}-using-220-PCs-50-neighbors-leiden-{leiden_resolution}"
     with mlflow.start_run(run_name=run_name_temp) as run:
-
         experiment_id = run.info.experiment_id
         run_id = run.info.run_id
 
@@ -105,19 +97,15 @@ def run_pipeline_spatial_clustering(filters):
             os.makedirs(directory_run)
 
         if experiment_state == "disease-state":
-            h5ad_filename = (
-                f"{directory_run}/spatial_clustering_ds_{data_filter_name}.h5ad"
-            )
+            h5ad_filename = f"{directory_run}/spatial_clustering_ds_{data_filter_name}.h5ad"
             # h5ad_filename_raw = (
             #     f"{directory_run}/spatial_clustering_ss_{data_filter_name}_raw.h5ad"
-            # )            
+            # )
         else:
-            h5ad_filename = (
-                f"{directory_run}/spatial_clustering_ss_{data_filter_name}.h5ad"
-            )
+            h5ad_filename = f"{directory_run}/spatial_clustering_ss_{data_filter_name}.h5ad"
             # h5ad_filename_raw = (
             #     f"{directory_run}/spatial_clustering_ss_{data_filter_name}_raw.h5ad"
-            # )            
+            # )
 
         pipeline_instance.data.write_h5ad(h5ad_filename)
         # pipeline_instance.data_raw.write_h5ad(h5ad_filename_raw)
@@ -134,7 +122,6 @@ def run_parallel_visualizations(experiment_runs_config):
 
 
 def build_visualizations_for_run(filters):
-
     experiment_id = filters["experiment_id"]
     run_id = filters["run_id"]
 
@@ -142,20 +129,17 @@ def build_visualizations_for_run(filters):
     # plots_instance.data.obs['leiden_res'] = plots_instance.data.obs['leiden_res'].map(ANNOTATION_DICT)
     plots_instance.generate_pca_plots()
     plots_instance.generate_umap_plots()
-    
-    directory_run = (
-        f"/data/qd452774/spatial_transcriptomics/data/{experiment_id}/{run_id}"
-    )
-    # directory_run_pca
-    # if not os.path.exists(directory_run):
+
+    directory_run = f"/data/qd452774/spatial_transcriptomics/data/{experiment_id}/{run_id}"
+
     os.makedirs(directory_run, exist_ok=True)
     os.makedirs(f"{directory_run}/PCA", exist_ok=True)
     os.makedirs(f"{directory_run}/UMAP", exist_ok=True)
 
     logger.info("Creating visualizations for")
     logger.info(directory_run)
-        
-    with mlflow.start_run(experiment_id=experiment_id, run_id=run_id) as run:
+
+    with mlflow.start_run(experiment_id=experiment_id, run_id=run_id) as run:  # noqa
         for fig_name in plots_instance.all_generated_pcas.keys():
             fig = plots_instance.all_generated_pcas[fig_name]
             pca_file_path = f"{directory_run}/PCA/{fig_name}.png"
@@ -174,7 +158,7 @@ def build_visualizations_for_run(filters):
             umap_file_path = f"{directory_run}/UMAP/{fig_name}.png"
             fig.write_image(umap_file_path, format="png", width=800, height=800, engine="kaleido")
             # pio.write_image(fig, umap_file_path, format="png", width=800, height=800)
-            mlflow.log_artifact(umap_file_path, "UMAP/images")            
+            mlflow.log_artifact(umap_file_path, "UMAP/images")
             fig.write_html(
                 f"{directory_run}/{fig_name}.html",
                 full_html=False,
@@ -182,41 +166,41 @@ def build_visualizations_for_run(filters):
             )
             mlflow.log_artifact(f"{directory_run}/{fig_name}.html", "UMAP")
 
-    # pio.show_config.close_opened_files = True
+        # pio.show_config.close_opened_files = True
 
         for item in plots_instance.categorical_columns:
-            all_slides = plots_instance.data.obs['sample'].unique()
+            all_slides = plots_instance.data.obs["sample"].unique()
 
             for slide_sample in all_slides:
                 fig_name = f"{item}_{slide_sample}"
                 fig = sq.pl.spatial_scatter(
-                    plots_instance.data[plots_instance.data.obs['sample'] == slide_sample, :],
+                    plots_instance.data[plots_instance.data.obs["sample"] == slide_sample, :],
                     shape=None,
                     color=item,
                     size=0.5,
-                    library_id='spatial',
+                    library_id="spatial",
                     figsize=(13, 13),
                     return_ax=True,
                 )
-                fig.figure.savefig(f"{directory_run}/{fig_name}.png", dpi=300, bbox_inches='tight')
+                fig.figure.savefig(f"{directory_run}/{fig_name}.png", dpi=300, bbox_inches="tight")
                 # plt.close(fig)
                 mlflow.log_artifact(f"{directory_run}/{fig_name}.png", "SpatialScatter")
 
         for item in plots_instance.numerical_columns:
-            all_slides = plots_instance.data.obs['sample'].unique()
+            all_slides = plots_instance.data.obs["sample"].unique()
 
             for slide_sample in all_slides:
                 fig_name = f"{item}_{slide_sample}"
                 fig = sq.pl.spatial_scatter(
-                    plots_instance.data[plots_instance.data.obs['sample'] == slide_sample, :],
+                    plots_instance.data[plots_instance.data.obs["sample"] == slide_sample, :],
                     shape=None,
                     color=item,
                     size=0.5,
-                    library_id='spatial',
+                    library_id="spatial",
                     figsize=(13, 13),
                     return_ax=True,
                 )
-                fig.figure.savefig(f"{directory_run}/{fig_name}.png", dpi=300, bbox_inches='tight')
+                fig.figure.savefig(f"{directory_run}/{fig_name}.png", dpi=300, bbox_inches="tight")
                 # plt.close(fig)
                 mlflow.log_artifact(f"{directory_run}/{fig_name}.png", "SpatialScatter")
 
@@ -233,13 +217,13 @@ filters_list = [
     #     "names_list" : ["Liver1Slice2"],
     #     "state": "steady-state",
     #     "filter_nans" : False,
-    # }, 
+    # },
     # {
     #     "data_filter_name" : "Liver2Slice1",
     #     "names_list" : ["Liver2Slice1"],
     #     "state": "steady-state",
     #     "filter_nans" : False,
-    # }, 
+    # },
     # {
     #     "data_filter_name" : "Liver2Slice2",
     #     "names_list" : ["Liver2Slice2"],
@@ -251,7 +235,7 @@ filters_list = [
     #     "names_list" : ["Liver1Slice1", "Liver1Slice2"],
     #     "state": "steady-state",
     #     "filter_nans" : False,
-    # }, 
+    # },
     # {
     #     "data_filter_name" : "Liver2Slice12",
     #     "names_list" : ["Liver2Slice1", "Liver2Slice2"],
@@ -259,10 +243,10 @@ filters_list = [
     #     "filter_nans" : False,
     # },
     {
-        "data_filter_name" : "Liver12Slice12",
-        "names_list" : ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"],
+        "data_filter_name": "Liver12Slice12",
+        "names_list": ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"],
         "state": "steady-state",
-        "filter_nans" : False,
+        "filter_nans": False,
     },
 ]
 # leiden_filters = []
@@ -281,7 +265,7 @@ filters_list = [
 #         "names_list": ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"],
 #         "state": "steady-state",
 #         "filter_nans": False,
-#     }    
+#     }
 #     new_filter["leiden_resolution"] = res_
 #     leiden_filters.append(new_filter)
 
@@ -301,7 +285,7 @@ filters_list = [
 #         "names_list": ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"],
 #         "state": "steady-state",
 #         "filter_nans" : False,
-#     }    
+#     }
 # )
 
 mlflow.set_tracking_uri("/data/qd452774/spatial_transcriptomics/mlruns/")
@@ -310,37 +294,41 @@ client = mlflow.tracking.MlflowClient()
 experiments_config = []
 
 for experiment_config in filters_list:
-    
     my_experiment = f"spatial_clustering_{experiment_config['data_filter_name']}"
     my_experiment_id = client.get_experiment_by_name(my_experiment).experiment_id
 
     my_runs = client.search_runs(experiment_ids=[my_experiment_id])
 
     for each_run in my_runs:
-        
-        if 'leiden-0.7' in each_run.info.run_name:# or 'leiden-1.0' in each_run.info.run_name or 'leiden-1.1' in each_run.info.run_name:
+        if (
+            "leiden-0.7" in each_run.info.run_name
+        ):  # or 'leiden-1.0' in each_run.info.run_name or 'leiden-1.1' in each_run.info.run_name:
             try:
                 artifact_location_base = f"/data/qd452774/spatial_transcriptomics/mlruns/{my_experiment_id}/{each_run.info.run_uuid}/artifacts"
 
-                if each_run.data.tags['state'] == 'disease-state':
-                    my_filename = f"{artifact_location_base}/data/spatial_clustering_ds_{each_run.data.tags['data_filter']}.h5ad"
+                if each_run.data.tags["state"] == "disease-state":
+                    my_filename = (
+                        f"{artifact_location_base}/data/spatial_clustering_ds_{each_run.data.tags['data_filter']}.h5ad"
+                    )
                 else:
-                    my_filename = f"{artifact_location_base}/data/spatial_clustering_ss_{each_run.data.tags['data_filter']}.h5ad"
-                
+                    my_filename = (
+                        f"{artifact_location_base}/data/spatial_clustering_ss_{each_run.data.tags['data_filter']}.h5ad"
+                    )
+
                 experiments_config.append(
                     {
-                        "data_filter_name": each_run.data.tags['data_filter'],
+                        "data_filter_name": each_run.data.tags["data_filter"],
                         "state": each_run.data.tags["state"],
                         "experiment": my_experiment,
                         "experiment_id": my_experiment_id,
                         "run_name": each_run.data.tags["run_name"],
                         "run_id": each_run.info.run_uuid,
                         "data_file_name": my_filename,
-                        "names_list": ast.literal_eval(each_run.data.params['names_list']),
-                        
+                        "names_list": ast.literal_eval(each_run.data.params["names_list"]),
                     }
                 )
-            except:
+            except Exception as e:
+                print(e)
                 pass
 
 # run_parallel_visualizations(experiments_config)
