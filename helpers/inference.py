@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Mon Aug 16 20:50:26 2021
-
-@author: zqwu
+Provide functions for node classification model inference and evaluation
 """
 import torch
 import numpy as np
@@ -59,7 +55,13 @@ def predict_on_batch(batch, model, device, dataset):
     }
     # precision_recall_fig = plotly_precision_recall_curve(node_y.cpu().numpy(), node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
     node_embeddings = res[-1].detach().cpu().numpy()
-    return node_preds, graph_preds, confusion_matrix_info, precision_recall_info, node_embeddings
+    return (
+        node_preds,
+        graph_preds,
+        confusion_matrix_info,
+        precision_recall_info,
+        node_embeddings,
+    )
 
 
 def save_pred(
@@ -249,7 +251,13 @@ def collect_predict_for_all_nodes(
         with ThreadPoolExecutor(max_workers=NO_JOBS) as executor:
             executor.map(process_index, inds)
 
-    return node_results, graph_results, confusion_matrix_results, precision_recall_results, node_embeddings_results
+    return (
+        node_results,
+        graph_results,
+        confusion_matrix_results,
+        precision_recall_results,
+        node_embeddings_results,
+    )
 
 
 def collect_predict_by_random_sample(

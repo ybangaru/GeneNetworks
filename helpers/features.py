@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Mon April 3 14:53:02 2023
-
-@author: zqwu
+Helper functions for processing node/edge features
 """
 
 import numpy as np
@@ -13,8 +9,8 @@ import warnings
 import torch
 import torch_geometric as tg
 
-from .utils import EDGE_TYPES
-from helpers import logger, extract_boundary_features
+from .experiment_config import EDGE_TYPES
+from .graph_build import extract_boundary_features
 
 
 def process_biomarker_expression(
@@ -96,7 +92,7 @@ def process_neighbor_composition(G, node_ind, cell_type_mapping=None, neighborho
         neighbors = {n: feat_dict["center_coord"] for n, feat_dict in ego_g.nodes.data()}
 
     closest_neighbors = sorted(neighbors.keys(), key=lambda x: node_dist(center_coord, neighbors[x]))
-    closest_neighbors = closest_neighbors[1 : (neighborhood_size + 1)]
+    closest_neighbors = closest_neighbors[1 : (neighborhood_size + 1)]  # noqa: E203
 
     comp_vec = np.zeros((len(cell_type_mapping),))
     for n in closest_neighbors:
@@ -122,7 +118,11 @@ def process_edge_distance(G, edge_ind, log_distance_lower_bound=2.0, log_distanc
     """
     dist = G.edges[edge_ind]["distance"]
     log_dist = np.log(dist + 1e-5)
-    _d = np.clip((log_dist - log_distance_lower_bound) / (log_distance_upper_bound - log_distance_lower_bound), 0, 1)
+    _d = np.clip(
+        (log_dist - log_distance_lower_bound) / (log_distance_upper_bound - log_distance_lower_bound),
+        0,
+        1,
+    )
     return [_d]
 
 
@@ -234,7 +234,12 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
 
 def nx_to_tg_graph(
     G,
-    node_features=["cell_type", "biomarker_expression", "neighborhood_composition", "center_coord"],
+    node_features=[
+        "cell_type",
+        "biomarker_expression",
+        "neighborhood_composition",
+        "center_coord",
+    ],
     edge_features=["edge_type", "distance"],
     **feature_kwargs
 ):

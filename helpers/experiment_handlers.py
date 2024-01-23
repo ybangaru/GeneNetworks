@@ -1,3 +1,7 @@
+"""
+This file contains the classes for handling the experiments clustering, classification and
+the visualization of the results during and after the experiments.
+"""
 import os
 import pickle
 import networkx as nx
@@ -11,8 +15,14 @@ from shapely.geometry import Polygon
 from rtree import index
 import plotly.io as pio
 
-from .data_boundary import BoundaryDataLoader
-from .graph_build import calcualte_voronoi_from_coords, build_graph_from_cell_coords, assign_attributes, get_edge_type
+from .data import BoundaryDataLoader
+from .local_config import PROJECT_DIR
+from .graph_build import (
+    calcualte_voronoi_from_coords,
+    build_graph_from_cell_coords,
+    assign_attributes,
+    get_edge_type,
+)
 from .mlflow_client_ import read_run_result_ann_data
 from .plotly_helpers import (
     plotly_spatial_scatter_categorical,
@@ -87,7 +97,12 @@ class spatialPipeline:
         padding_info = segment_config.get("padding", None)
 
         boundary_instance = BoundaryDataLoader(
-            slide_name, x_range_index, y_range_index, n_segments=n_segments, z_index=z_index, padding=padding_info
+            slide_name,
+            x_range_index,
+            y_range_index,
+            n_segments=n_segments,
+            z_index=z_index,
+            padding=padding_info,
         )
         boundary_arrays = boundary_instance.read_boundaries(self.data)
         self.segment_instances[(slide_name, x_range_index, y_range_index, n_segments)] = boundary_instance
@@ -170,7 +185,7 @@ class spatialPipeline:
             padding_dict = None
 
         if padding_dict:
-            if all(padding_dict.values()) == True:
+            if all(padding_dict.values()) == True:  # noqa
                 return None
 
         G_segment = assign_attributes(
@@ -203,7 +218,12 @@ class spatialPipeline:
         return G_segment
 
     def build_networkx_plots(
-        self, G_segment, segment_config, pretransform_networkx_config, save_=False, cat_column="cell_type"
+        self,
+        G_segment,
+        segment_config,
+        pretransform_networkx_config,
+        save_=False,
+        cat_column="cell_type",
     ):
         plots_ = {}
         if pretransform_networkx_config["edge_config"]["type"] == "Delaunay":
@@ -259,11 +279,13 @@ class spatialPipeline:
         plots_[
             f'edge_{str.lower(pretransform_networkx_config["edge_config"]["type"])}_{pretransform_networkx_config["edge_config"]["bound_type"]}'
         ] = plotly_spatial_scatter_edges(
-            G_segment, self.data.obs[cat_column], edge_info=pretransform_networkx_config["edge_config"]["type"]
+            G_segment,
+            self.data.obs[cat_column],
+            edge_info=pretransform_networkx_config["edge_config"]["type"],
         )
 
         if save_:
-            dataset_root = f"/data/qd452774/spatial_transcriptomics/data/Liver12Slice12_leiden_res_0.7"
+            dataset_root = f"{PROJECT_DIR}/data/Liver12Slice12_leiden_res_0.7"
             boundary_name = str.lower(pretransform_networkx_config["boundary_type"])
             edge_name = str.lower(pretransform_networkx_config["edge_config"]["type"])
             no_segments_ = segment_config["segments_per_dimension"]
@@ -287,7 +309,12 @@ class spatialPipeline:
             for key, val in plots_.items():
                 val.write_html(f"{nx_fig_name}_{key}.html")
                 width_height = 1200
-                pio.write_image(val, f"{nx_fig_name}_{key}.png", width=width_height, height=width_height)
+                pio.write_image(
+                    val,
+                    f"{nx_fig_name}_{key}.png",
+                    width=width_height,
+                    height=width_height,
+                )
 
         # return plots_
 
@@ -432,15 +459,15 @@ class spatialPreProcessor:
         self.options = options
 
     def extract(self, data):
-        if self.options["var_names_make_unique"] == True:
+        if self.options["var_names_make_unique"] == True:  # noqa
             data.var_names_make_unique()
 
         data.obs["is_not_filtered_cells"] = sc.pp.filter_cells(data, **self.options["filter_cells"], inplace=False)[0]
         data.var["is_not_filtered_genes"] = sc.pp.filter_genes(data, **self.options["filter_genes"], inplace=False)[0]
         print(f"Shape of AnnData: {data.shape}")
-        if self.options["find_mt"] == True:
+        if self.options["find_mt"] == True:  # noqa
             data.var["mt"] = data.var_names.str.startswith("mt-")
-        if self.options["find_rp"] == True:
+        if self.options["find_rp"] == True:  # noqa
             data.var["rp"] = data.var_names.str.contains("^Rp[sl]")
 
         # if self.options["find_mt"] == True or self.options["find_rp"] == True:
@@ -467,6 +494,77 @@ class spatialPreProcessor:
         print(f"Shape of AnnData filtered: {data_filtered.shape}")
         print(f"Shape of AnnData raw: {data.shape}")
         return data_filtered, data
+
+
+class scRNAPipeline:
+    def __init__(self, options):
+        # super().__init__()
+        self.file_name = options["name"]
+        self.annotations_file_name = options["annotations"]
+        self.filter_config = options["filters"]
+        self.drop_na_data = options["drop_na"]
+        self.data = self.read_data()
+
+    def read_data(self):
+        # if not self.data:
+        data = sc.read_h5ad(self.file_name)
+        annotations_data = pd.read_csv(self.annotations_file_name)
+        data.obs = pd.merge(
+            data.obs,
+            annotations_data.set_index("cell"),
+            left_index=True,
+            right_index=True,
+            how="left",
+        )
+        if self.filter_config:
+            for column, condition in self.filter_config.items():
+                data = data[data.obs[column].apply(condition)]
+        if self.drop_na_data:
+            data = data[data.obs.dropna().index]
+        return data
+
+    def preprocess_data(self, proprocessor):
+        proprocessor.extract(self.data)
+
+    def perform_pca(self, pca_options):
+        sc.tl.pca(self.data, **pca_options)
+
+    def perform_clustering(self, clustering_options):
+        # Preprocess the data
+        sc.tl.umap(self.data, **clustering_options["umap"])
+
+        # Louvain clustering
+        sc.tl.louvain(self.data, **clustering_options["louvain"])
+
+        # Leiden clustering
+        sc.tl.leiden(self.data, **clustering_options["leiden"])
+
+        # PAGA clustering
+        sc.tl.paga(self.data, **clustering_options["paga"])
+
+    def compute_neighborhood_graph(self, ng_options):
+        sc.pp.neighbors(self.data, **ng_options)  # , n_pcs=50
+
+
+class scRNAPreProcessor:
+    def __init__(self, options):
+        self.options = options
+
+    def extract(self, data):
+        # TODO : move this to plots
+        # sc.pl.highest_expr_genes(data, **self.options=={'n_top' : 30})
+        sc.pp.filter_cells(data, **self.options["filter_cells"])
+        sc.pp.filter_genes(data, **self.options["filter_genes"])
+
+        if self.options["find_mt"] == True:  # noqa
+            data.var["mt"] = data.var_names.str.startswith("mt-")
+        if self.options["find_rp"] == True:  # noqa
+            data.var["rp"] = data.var_names.str.contains("^Rp[sl]")
+        sc.pp.calculate_qc_metrics(data, **self.options["qc_metrics"])
+        sc.pp.normalize_total(data, **self.options["normalize_totals"])
+        sc.pp.log1p(data, **self.options["log1p_transformation"])
+        sc.pp.highly_variable_genes(data, **self.options["highly_variable_genes"])
+        sc.pp.scale(data, **self.options["scale"])
 
 
 class VisualizePipeline:

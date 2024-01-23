@@ -1,19 +1,21 @@
+"""
+This file contains helper functions for building plots using Plotly.
+"""
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import pandas as pd
 import plotly.io as pio
-
 import scanpy as sc
 from typing import (
     Union,
     Optional,
 )
-
 import numpy as np
 import matplotlib.colors as mcolors
 from sklearn.metrics import confusion_matrix, precision_recall_curve, auc
 from sklearn.preprocessing import LabelBinarizer
+
 from .logging_setup import logger
 
 pio.templates.default = "plotly_dark"
@@ -674,7 +676,11 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
             x=node_coords[mask, 0],
             y=node_coords[mask, 1],
             mode="markers",
-            marker=dict(size=8, color=color_dict[cell_type], line=dict(width=0.5, color=color_dict[cell_type])),
+            marker=dict(
+                size=8,
+                color=color_dict[cell_type],
+                line=dict(width=0.5, color=color_dict[cell_type]),
+            ),
             # text=[name for i, name in enumerate(node_names) if mask[i]],
             # hoverinfo="text",
             name=str(cell_type),  # Set the name for the legend entry
@@ -737,7 +743,14 @@ def plotly_precision_recall_curve(y_true, y_scores, class_names, title="Precisio
         precision, recall, _ = precision_recall_curve(y_true_bin[:, i], y_scores[:, i])
         pr_auc = auc(recall, precision)
 
-        fig.add_trace(go.Scatter(x=recall, y=precision, mode="lines", name=f"{class_names[i]} (AUC = {pr_auc:.2f})"))
+        fig.add_trace(
+            go.Scatter(
+                x=recall,
+                y=precision,
+                mode="lines",
+                name=f"{class_names[i]} (AUC = {pr_auc:.2f})",
+            )
+        )
 
     fig.update_layout(
         title=title,
@@ -773,11 +786,21 @@ def plotly_node_embeddings_2d(embeddings, labels, class_names, title="Node Embed
     label_names = [class_names[label] for label in labels]
 
     df = pd.DataFrame(
-        {"X": embeddings[:, 0], "Y": embeddings[:, 1], "Label": label_names}  # Use the mapped class names as labels
+        {
+            "X": embeddings[:, 0],
+            "Y": embeddings[:, 1],
+            "Label": label_names,
+        }  # Use the mapped class names as labels
     )
 
     fig = px.scatter(
-        df, x="X", y="Y", color="Label", hover_name="Label", title=title, category_orders={"Label": class_names}
+        df,
+        x="X",
+        y="Y",
+        color="Label",
+        hover_name="Label",
+        title=title,
+        category_orders={"Label": class_names},
     )
 
     return fig
@@ -797,7 +820,80 @@ def plotly_node_embeddings_3d(embeddings, labels, class_names, title="Node Embed
     )
 
     fig = px.scatter_3d(
-        df, x="X", y="Y", z="Z", color="Label", hover_name="Label", title=title, category_orders={"Label": class_names}
+        df,
+        x="X",
+        y="Y",
+        z="Z",
+        color="Label",
+        hover_name="Label",
+        title=title,
+        category_orders={"Label": class_names},
     )
 
     return fig
+
+
+def build_subgraph_for_plotly(dataset, idx, center_ind):
+    # def plot_subgraph(self, idx, center_ind):
+    #     """Plot the n-hop subgraph around cell `center_ind` from region `idx`"""
+    xcoord_ind = dataset.node_feature_names.index("center_coord-x")
+    ycoord_ind = dataset.node_feature_names.index("center_coord-y")
+
+    _subg = dataset.calculate_subgraph(idx, center_ind)
+    coords = _subg.x.data.numpy()[:, [xcoord_ind, ycoord_ind]].astype(float)
+    x_c, y_c = coords[_subg.center_node_index]
+
+    G = dataset.get_full_nx(idx)
+    sub_node_inds = []
+    for n in G.nodes:
+        c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
+        if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
+            sub_node_inds.append(n)
+    assert len(sub_node_inds) == len(coords)
+    _G = G.subgraph(sub_node_inds)
+
+    node_colors = {f"{_G.nodes[n]['cell_id']}": dataset.cell_type_mapping[_G.nodes[n]["cell_type"]] for n in _G.nodes}
+    test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
+    # color_column = pd.Series(node_colors, index=_G.nodes)
+    color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
+    color_column = color_column["leiden_res"]
+
+    return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
+
+
+if __name__ == "__main__":
+    from .data import CellularGraphDataset
+    from .local_config import PROJECT_DIR
+
+    dataset_root = f"{PROJECT_DIR}/data/example_dataset"
+    dataset_kwargs = {
+        "transform": [],
+        "pre_transform": None,
+        "raw_folder_name": "graph",  # os.path.join(dataset_root, "graph") is the folder where we saved nx graphs
+        "processed_folder_name": "tg_graph",  # processed dataset files will be stored here
+        "node_features": [
+            "cell_type",
+            "volume",
+            "biomarker_expression",
+            "neighborhood_composition",
+            "center_coord",
+        ],  # There are all the cellular features that we want the dataset to compute
+        "edge_features": ["edge_type", "distance"],  # edge (cell pair) features
+        "subgraph_size": 3,  # indicating we want to sample 3-hop subgraphs from these regions (for training/inference), this is a core parameter for SPACE-GM.
+        "subgraph_source": "on-the-fly",
+        "subgraph_allow_distant_edge": True,
+        "subgraph_radius_limit": 400.0,
+    }
+
+    feature_kwargs = {
+        "biomarker_expression_process_method": "linear",
+        "biomarker_expression_lower_bound": 0,
+        "biomarker_expression_upper_bound": 18,
+        "neighborhood_size": 10,
+    }
+    dataset_kwargs.update(feature_kwargs)
+
+    logger.info("Loading CellularGraphDataset for the following comfig...")
+    logger.info(dataset_kwargs)
+    dataset = CellularGraphDataset(dataset_root, **dataset_kwargs)
+    logger.info(dataset)

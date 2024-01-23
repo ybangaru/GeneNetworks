@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Fri Jul 30 23:26:02 2021
-
-@author: zqwu
+Modules to handle pytorch geometric datasets, including data loading, processing, and transformations
+from networkx graphs to pytorch geometric data objects, building k-hop subgraphs, Vizgen Cell
+Boundary Data Loader, Random Subgraph Sampler, etc.
 """
 
 import os
@@ -48,7 +46,12 @@ class CellularGraphDataset(Dataset):
         pre_transform=None,
         raw_folder_name="graph",
         processed_folder_name="tg_graph",
-        node_features=["cell_type", "expression", "neighborhood_composition", "center_coord"],
+        node_features=[
+            "cell_type",
+            "expression",
+            "neighborhood_composition",
+            "center_coord",
+        ],
         edge_features=["edge_type", "distance"],
         cell_type_mapping=None,
         cell_type_freq=None,
@@ -98,9 +101,11 @@ class CellularGraphDataset(Dataset):
         # Find all unique cell types in the dataset
         if cell_type_mapping is None or cell_type_freq is None:
             nx_graph_files = [os.path.join(self.raw_dir, f) for f in self.raw_file_names]
-            self.cell_type_mapping, self.cell_type_freq, self.cell_annotation_mapping = get_cell_type_metadata(
-                nx_graph_files
-            )
+            (
+                self.cell_type_mapping,
+                self.cell_type_freq,
+                self.cell_annotation_mapping,
+            ) = get_cell_type_metadata(nx_graph_files)
         else:
             self.cell_type_mapping = cell_type_mapping
             self.cell_type_freq = cell_type_freq
@@ -123,10 +128,14 @@ class CellularGraphDataset(Dataset):
             assert self.edge_features.index("edge_type") == 0, "edge_type must be the first edge feature"
 
         self.node_feature_names = get_feature_names(
-            node_features, cell_type_mapping=self.cell_type_mapping, biomarkers=self.biomarkers
+            node_features,
+            cell_type_mapping=self.cell_type_mapping,
+            biomarkers=self.biomarkers,
         )
         self.edge_feature_names = get_feature_names(
-            edge_features, cell_type_mapping=self.cell_type_mapping, biomarkers=self.biomarkers
+            edge_features,
+            cell_type_mapping=self.cell_type_mapping,
+            biomarkers=self.biomarkers,
         )
 
         # Prepare kwargs for node and edge featurization
@@ -232,7 +241,10 @@ class CellularGraphDataset(Dataset):
 
             # Transform networkx graphs to pyg data objects, and add features for nodes and edges
             data_list = nx_to_tg_graph(
-                G, node_features=self.node_features, edge_features=self.edge_features, **self.feature_kwargs
+                G,
+                node_features=self.node_features,
+                edge_features=self.edge_features,
+                **self.feature_kwargs,
             )
 
             for i, d in enumerate(data_list):
@@ -243,7 +255,10 @@ class CellularGraphDataset(Dataset):
                 if self.pre_transform is not None:
                     for transform_fn in self.pre_transform:
                         d = transform_fn(d)
-                torch.save(d, os.path.join(self.processed_dir, "%s.%d.gpt" % (d.region_id, d.component_id)))
+                torch.save(
+                    d,
+                    os.path.join(self.processed_dir, "%s.%d.gpt" % (d.region_id, d.component_id)),
+                )
 
         logger.info("Starting processing of %d graphs" % len(self.raw_file_names))
         all_nx_files = [os.path.join(self.raw_dir, file_item) for file_item in self.raw_file_names]
@@ -481,7 +496,14 @@ class CellularGraphDataset(Dataset):
         plt.axis("off")
 
 
-def k_hop_subgraph(node_ind, subgraph_size, edge_index, edge_type_mask=None, relabel_nodes=False, num_nodes=None):
+def k_hop_subgraph(
+    node_ind,
+    subgraph_size,
+    edge_index,
+    edge_type_mask=None,
+    relabel_nodes=False,
+    num_nodes=None,
+):
     """A customized k-hop subgraph fn that filter for edge_type
 
     Args:
@@ -616,7 +638,7 @@ class SubgraphSampler(object):
             self.set_subset_inds(self.selected_inds)
         else:
             graph_inds_in_segment = self.region_inds_queue[: self.num_regions_per_segment]
-            self.region_inds_queue = self.region_inds_queue[self.num_regions_per_segment :]
+            self.region_inds_queue = self.region_inds_queue[self.num_regions_per_segment :]  # noqa: E203
             if len(self.region_inds_queue) < self.num_regions_per_segment:
                 self.fill_queue()
 
@@ -661,7 +683,15 @@ class SubgraphSampler(object):
 
 
 class BoundaryDataLoader:
-    def __init__(self, slide_name, x_range_index, y_range_index, n_segments=20, z_index=0, padding=None) -> None:
+    def __init__(
+        self,
+        slide_name,
+        x_range_index,
+        y_range_index,
+        n_segments=20,
+        z_index=0,
+        padding=None,
+    ) -> None:
         self.slide_name = slide_name
         self.dir_location = f"{os.path.realpath(os.path.join(os.getcwd()))}/data/{self.slide_name}"
 
@@ -700,7 +730,10 @@ class BoundaryDataLoader:
         for i in range(self.n_segments):
             centroid_to_fov_dict[i] = [segments[i], segments[i + 1]]
             if self.padding is not None:
-                centroid_to_fov_dict_padding[i] = [segments[i] - padding_um, segments[i + 1] + padding_um]
+                centroid_to_fov_dict_padding[i] = [
+                    segments[i] - padding_um,
+                    segments[i + 1] + padding_um,
+                ]
 
         if self.padding is not None:
             self.padding[f"centroid_to_fov_{axis}"] = centroid_to_fov_dict_padding
@@ -831,7 +864,13 @@ if __name__ == "__main__":
         "pre_transform": None,
         "raw_folder_name": "graph",
         "processed_folder_name": "tg_graph",
-        "node_features": ["cell_type", "volume", "biomarker_expression", "neighborhood_composition", "center_coord"],
+        "node_features": [
+            "cell_type",
+            "volume",
+            "biomarker_expression",
+            "neighborhood_composition",
+            "center_coord",
+        ],
         "edge_features": ["edge_type", "distance"],
         "subgraph_size": 3,
         "subgraph_source": "on-the-fly",

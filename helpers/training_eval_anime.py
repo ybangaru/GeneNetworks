@@ -1,13 +1,23 @@
+"""
+This module contains functions to build animation plots for continuous evaluation of training
+results.
+"""
 import pandas as pd
 import numpy as np
-
-# TODO: Build sklearn.metrics classification report animation as well
 from sklearn.metrics import confusion_matrix
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from .mlflow_client_ import MLFLOW_CLIENT, ANNOTATION_DICT, read_run_embeddings_df, read_run_node_true_pred_labels
+
+# TODO: Build sklearn.metrics classification report animation as well
+
+from .mlflow_client_ import (
+    MLFLOW_CLIENT,
+    read_run_embeddings_df,
+    read_run_node_true_pred_labels,
+)
 from .plotly_helpers import COLORS_LIST
+from .experiment_config import ANNOTATION_DICT
 
 
 def build_embeddings_anime_2d(experiment_id, run_id):
@@ -55,7 +65,10 @@ def build_embeddings_anime_2d(experiment_id, run_id):
                     dict(
                         label="Play",
                         method="animate",
-                        args=[None, dict(frame=dict(duration=50, redraw=True), fromcurrent=True)],
+                        args=[
+                            None,
+                            dict(frame=dict(duration=50, redraw=True), fromcurrent=True),
+                        ],
                     )
                 ],
             )
@@ -112,7 +125,10 @@ def build_embeddings_anime_3d(experiment_id, run_id):
                     dict(
                         label="Play",
                         method="animate",
-                        args=[None, dict(frame=dict(duration=50, redraw=True), fromcurrent=True)],
+                        args=[
+                            None,
+                            dict(frame=dict(duration=50, redraw=True), fromcurrent=True),
+                        ],
                     )
                 ],
             )
@@ -132,7 +148,8 @@ def build_confusion_matrix_anime(experiment_id, run_id):
     df = read_run_node_true_pred_labels(experiment_id, run_id)
     act_labels = [int(item) for item in ANNOTATION_DICT.keys()]
     df["normalized_confusion_matrix"] = df.apply(
-        lambda row: create_confusion_matrix(row["true_labels"], row["pred_labels"], labels=act_labels), axis=1
+        lambda row: create_confusion_matrix(row["true_labels"], row["pred_labels"], labels=act_labels),
+        axis=1,
     )
 
     fig = make_subplots(rows=1, cols=1)  # , subplot_titles=['Confusion Matrix Animation'])
@@ -170,7 +187,11 @@ def build_confusion_matrix_anime(experiment_id, run_id):
             method="animate",
             args=[
                 [str(iteration)],
-                {"frame": {"duration": 500, "redraw": True}, "mode": "immediate", "transition": {"duration": 300}},
+                {
+                    "frame": {"duration": 500, "redraw": True},
+                    "mode": "immediate",
+                    "transition": {"duration": 300},
+                },
             ],
             value=iteration,
         )
@@ -213,7 +234,18 @@ def build_confusion_matrix_anime(experiment_id, run_id):
     )
 
     fig.update_layout(
-        sliders=[dict(steps=slider_steps, active=0, x=0.1, y=0, xanchor="left", yanchor="top", len=0.9, pad={"t": 50})]
+        sliders=[
+            dict(
+                steps=slider_steps,
+                active=0,
+                x=0.1,
+                y=0,
+                xanchor="left",
+                yanchor="top",
+                len=0.9,
+                pad={"t": 50},
+            )
+        ]
     )
 
     # Update layout settings
@@ -222,19 +254,21 @@ def build_confusion_matrix_anime(experiment_id, run_id):
 
 
 def main():
+    from .local_config import PROJECT_DIR
+
     exp_id = "303267778283029741"
     my_runs = MLFLOW_CLIENT.search_runs(experiment_ids=[exp_id])
     run_ids = [run.info.run_uuid for run in my_runs]
     run_id = run_ids[0]
 
     confusion_matrix_fig = build_confusion_matrix_anime(exp_id, run_id)
-    confusion_matrix_fig.write_html("/data/qd452774/spatial_transcriptomics/test_confusion_matrix.html")
+    confusion_matrix_fig.write_html(f"{PROJECT_DIR}/test_confusion_matrix.html")
 
     emb_fig = build_embeddings_anime_2d(exp_id, run_id)
-    emb_fig.write_html("/data/qd452774/spatial_transcriptomics/test_embeddings_2d.html")
+    emb_fig.write_html(f"{PROJECT_DIR}/test_embeddings_2d.html")
 
     emb_fig_3d = build_embeddings_anime_3d(exp_id, run_id)
-    emb_fig_3d.write_html("/data/qd452774/spatial_transcriptomics/test_embeddings_3d.html")
+    emb_fig_3d.write_html(f"{PROJECT_DIR}/test_embeddings_3d.html")
 
 
 if __name__ == "__main__":

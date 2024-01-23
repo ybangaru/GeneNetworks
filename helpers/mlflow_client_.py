@@ -1,3 +1,6 @@
+"""
+This module instanciates an MLflow client and provides functions to read the results of a run from MLflow.
+"""
 import glob
 import re
 import pandas as pd
@@ -5,8 +8,9 @@ import numpy as np
 import mlflow
 import scanpy as sc
 from .logging_setup import logger
+from .local_config import MLFLOW_TRACKING_URI
 
-mlflow.set_tracking_uri("/data/qd452774/spatial_transcriptomics/mlruns/")
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 MLFLOW_CLIENT = mlflow.tracking.MlflowClient()
 
 
@@ -38,21 +42,25 @@ def read_run_result_ann_data(data_filter_name, x_resolution):
     xrun_info = get_run_info(data_filter_name, x_resolution)
     exp_id = xrun_info.info.experiment_id
     run_id = xrun_info.info.run_id
-    x_anndata_path = f"/data/qd452774/spatial_transcriptomics/mlruns/{exp_id}/{run_id}/artifacts/data/spatial_clustering_ss_{data_filter_name}.h5ad"
+    x_anndata_path = (
+        f"{MLFLOW_TRACKING_URI}{exp_id}/{run_id}/artifacts/data/spatial_clustering_ss_{data_filter_name}.h5ad"
+    )
     x_data = sc.read_h5ad(x_anndata_path)
 
     return x_data
 
 
 def read_run_node_true_pred_labels(experiment_id, run_id):
-    true_labels_folder = f"/data/qd452774/spatial_transcriptomics/mlruns/{experiment_id}/{run_id}/artifacts/node_class"
-    pred_labels_folder = f"/data/qd452774/spatial_transcriptomics/mlruns/{experiment_id}/{run_id}/artifacts/node_probs"
+    true_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/node_class"
+    pred_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/node_probs"
 
     true_labels_file_names = sorted(
-        glob.glob(f"{true_labels_folder}/*.npy"), key=lambda x: int(re.search(r"\d+", x).group())
+        glob.glob(f"{true_labels_folder}/*.npy"),
+        key=lambda x: int(re.search(r"\d+", x).group()),
     )
     pred_labels_file_names = sorted(
-        glob.glob(f"{pred_labels_folder}/*.npy"), key=lambda x: int(re.search(r"\d+", x).group())
+        glob.glob(f"{pred_labels_folder}/*.npy"),
+        key=lambda x: int(re.search(r"\d+", x).group()),
     )
 
     true_numbers = []
@@ -75,7 +83,12 @@ def read_run_node_true_pred_labels(experiment_id, run_id):
         pred_labels.append(pred_array)
 
     df = pd.DataFrame(
-        {"true_num": true_numbers, "pred_num": pred_numbers, "true_labels": true_labels, "pred_labels": pred_labels}
+        {
+            "true_num": true_numbers,
+            "pred_num": pred_numbers,
+            "true_labels": true_labels,
+            "pred_labels": pred_labels,
+        }
     )
     df["pred_labels"] = df["pred_labels"].apply(lambda x: np.argmax(x, axis=1))
     assert (df["true_num"] == df["pred_num"]).all()
@@ -85,8 +98,11 @@ def read_run_node_true_pred_labels(experiment_id, run_id):
 
 
 def read_run_embeddings_df(experiment_id, run_id):
-    embedding_folder = f"/data/qd452774/spatial_transcriptomics/mlruns/{experiment_id}/{run_id}/artifacts/embeddings"
-    file_names = sorted(glob.glob(f"{embedding_folder}/*.npy"), key=lambda x: int(re.search(r"\d+", x).group()))
+    embedding_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/embeddings"
+    file_names = sorted(
+        glob.glob(f"{embedding_folder}/*.npy"),
+        key=lambda x: int(re.search(r"\d+", x).group()),
+    )
 
     numbers = []
     embeddings = []

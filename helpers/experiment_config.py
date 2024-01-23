@@ -1,5 +1,9 @@
+"""
+This file contains the configuration used for graph node classification experiments.
+The configuration is obtained after leiden clustering of scRNA-seq data and annotation of the clusters
+"""
 import json
-
+from .local_config import PROJECT_DIR
 
 # BASE_MICRONS = "20um"
 # BASE_MICRONS = "10um"
@@ -9,7 +13,7 @@ BASE_MICRONS = "5um"
 
 # Define the directory where your JSON files are located
 liver_slices = ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"]
-base_dir = "/data/qd452774/spatial_transcriptomics/data"
+base_dir = f"{PROJECT_DIR}/data"
 
 file_names = [f"{base_dir}/{slice_item}/images/manifest.json" for slice_item in liver_slices]
 
@@ -67,3 +71,6 @@ EDGE_TYPES = {
     "distant": 1,
     "self": 2,
 }
+
+RADIUS_RELAXATION = 0.1
+NEIGHBOR_EDGE_CUTOFF = 55  # distance cutoff for neighbor edges, 55 pixels~20 um

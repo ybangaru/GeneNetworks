@@ -1,8 +1,11 @@
+"""
+Experimental feature for the node identification into "edge", "inner" and "free" states
+"""
 import numpy as np
 import networkx as nx
 
 
-def calculate_node_state(node, sub_data):
+def calculate_node_state(node, sub_data, threshold_edge):
     # Get the adjacency matrix of the subgraph
     adjacency_matrix = nx.to_numpy_matrix(sub_data)
 

@@ -63,7 +63,11 @@ def get_cell_type_metadata(nx_graph_files):
             for item in cell_annotation_frequencies
         }
         sorted_cell_annotation_freq = dict(
-            sorted(cell_annotation_frequencies.items(), key=lambda item: item[1], reverse=True)
+            sorted(
+                cell_annotation_frequencies.items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )
         )
 
         with open(cell_type_mapping_path, "w") as json_file:

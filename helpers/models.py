@@ -1,10 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Mon Aug  2 11:28:18 2021
-
-@author: zqwu
-Adapted from https://github.com/snap-stanford/pretrain-gnns/blob/master/chem/model.py
+Provides variations of GNN models and loss functions used for node classification and graph classification.
 """
 
 import numpy as np
@@ -12,7 +7,13 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, softmax
-from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool, GlobalAttention, Set2Set
+from torch_geometric.nn import (
+    global_add_pool,
+    global_mean_pool,
+    global_max_pool,
+    GlobalAttention,
+    Set2Set,
+)
 import torch.nn.functional as F
 from torch_scatter import scatter_add
 from torch_geometric.nn.inits import glorot, zeros
@@ -34,7 +35,9 @@ class GINConv(MessagePassing):
 
         # Multi-layer perceptron
         self.mlp = torch.nn.Sequential(
-            torch.nn.Linear(emb_dim, 2 * emb_dim), torch.nn.ReLU(), torch.nn.Linear(2 * emb_dim, emb_dim)
+            torch.nn.Linear(emb_dim, 2 * emb_dim),
+            torch.nn.ReLU(),
+            torch.nn.Linear(2 * emb_dim, emb_dim),
         )
         self.edge_embedding = torch.nn.Embedding(NUM_EDGE_TYPE, emb_dim)
 
@@ -256,7 +259,12 @@ class GNN(torch.nn.Module):
             x, edge_index, edge_attr = argv[0], argv[1], argv[2]
         elif len(argv) == 4:
             # Support for GNNExplainer
-            x, edge_index, edge_attr, node_feat_mask = argv[0], argv[1], argv[2], argv[3]
+            x, edge_index, edge_attr, node_feat_mask = (
+                argv[0],
+                argv[1],
+                argv[2],
+                argv[3],
+            )
         elif len(argv) == 1:
             data = argv[0]
             node_feat_mask = None

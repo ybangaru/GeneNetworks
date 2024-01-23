@@ -1,10 +1,6 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Mon Aug  2 11:28:18 2021
-
-@author: zqwu
-
+Helper functions for training node and graph classification models, including
+evaluation and model saving functions
 """
 
 import os
@@ -14,8 +10,8 @@ import torch.optim
 import mlflow
 from .data import SubgraphSampler
 from .inference import collect_predict_for_all_nodes, collect_predict_by_random_sample
-
-from helpers import MLFLOW_CLIENT, logger
+from .mlflow_client_ import MLFLOW_TRACKING_URI
+from .logging_setup import logger
 
 
 def train_subgraph(
@@ -69,14 +65,19 @@ def train_subgraph(
     mlflow.set_experiment(kwargs["experiment_name"])
 
     with mlflow.start_run(run_name=kwargs["run_name"]) as run:
-        directory_run = (
-            f"/data/qd452774/spatial_transcriptomics/mlruns/{run.info.experiment_id}/{run.info.run_id}/artifacts"
-        )
-        for item in ["embeddings", "node_probs", "node_class", "node_class_pred", "model", "scorefile"]:
-            if not os.path.exists(f"{directory_run}/{item}"):
-                os.makedirs(f"{directory_run}/{item}")
-        kwargs["model_folder"] = f"{directory_run}/model"
-        kwargs["score_file"] = f"{directory_run}/scorefile/results.txt"
+        directory_run_artifacts = f"{MLFLOW_TRACKING_URI}{run.info.experiment_id}/{run.info.run_id}/artifacts"
+        for item in [
+            "embeddings",
+            "node_probs",
+            "node_class",
+            "node_class_pred",
+            "model",
+            "scorefile",
+        ]:
+            if not os.path.exists(f"{directory_run_artifacts}/{item}"):
+                os.makedirs(f"{directory_run_artifacts}/{item}")
+        kwargs["model_folder"] = f"{directory_run_artifacts}/model"
+        kwargs["score_file"] = f"{directory_run_artifacts}/scorefile/results.txt"
 
         for arg, value in dataset_kwargs.items():
             try:
@@ -165,10 +166,10 @@ def train_subgraph(
                 node_classes_pred = res[0].detach().cpu().numpy()
                 node_probs = torch.nn.functional.softmax(res[0], dim=1).detach().cpu().numpy()
 
-                embedding_filename = f"{directory_run}/embeddings/{i_iter}.npy"
-                node_probs_filename = f"{directory_run}/node_probs/{i_iter}.npy"
-                node_classes_filename = f"{directory_run}/node_class/{i_iter}.npy"
-                node_classes_pred_filename = f"{directory_run}/node_class_pred/{i_iter}.npy"
+                embedding_filename = f"{directory_run_artifacts}/embeddings/{i_iter}.npy"
+                node_probs_filename = f"{directory_run_artifacts}/node_probs/{i_iter}.npy"
+                node_classes_filename = f"{directory_run_artifacts}/node_class/{i_iter}.npy"
+                node_classes_pred_filename = f"{directory_run_artifacts}/node_class_pred/{i_iter}.npy"
 
                 np.save(embedding_filename, embeddings)
                 np.save(node_probs_filename, node_probs)
@@ -207,7 +208,15 @@ def train_subgraph(
                         **kwargs,
                     )
                     graph_type, *_rest_test_valid = result_list
-                    dataset_type, _, avg_pred, top1_acc, top3_acc, top5_acc, *_rest_valid = _rest_test_valid
+                    (
+                        dataset_type,
+                        _,
+                        avg_pred,
+                        top1_acc,
+                        top3_acc,
+                        top5_acc,
+                        *_rest_valid,
+                    ) = _rest_test_valid
 
                     mlflow.log_metric(f"{graph_type}-{dataset_type}-avg_pred", avg_pred, step=i_iter)
                     mlflow.log_metric(f"{graph_type}-{dataset_type}-top1_acc", top1_acc, step=i_iter)
@@ -215,11 +224,34 @@ def train_subgraph(
                     mlflow.log_metric(f"{graph_type}-{dataset_type}-top5_acc", top5_acc, step=i_iter)
 
                     if _rest_valid:
-                        dataset_type, _, avg_pred, top1_acc, top3_acc, top5_acc = _rest_valid
-                        mlflow.log_metric(f"{graph_type}-{dataset_type}-avg_pred", avg_pred, step=i_iter)
-                        mlflow.log_metric(f"{graph_type}-{dataset_type}-top1_acc", top1_acc, step=i_iter)
-                        mlflow.log_metric(f"{graph_type}-{dataset_type}-top3_acc", top3_acc, step=i_iter)
-                        mlflow.log_metric(f"{graph_type}-{dataset_type}-top5_acc", top5_acc, step=i_iter)
+                        (
+                            dataset_type,
+                            _,
+                            avg_pred,
+                            top1_acc,
+                            top3_acc,
+                            top5_acc,
+                        ) = _rest_valid
+                        mlflow.log_metric(
+                            f"{graph_type}-{dataset_type}-avg_pred",
+                            avg_pred,
+                            step=i_iter,
+                        )
+                        mlflow.log_metric(
+                            f"{graph_type}-{dataset_type}-top1_acc",
+                            top1_acc,
+                            step=i_iter,
+                        )
+                        mlflow.log_metric(
+                            f"{graph_type}-{dataset_type}-top3_acc",
+                            top3_acc,
+                            step=i_iter,
+                        )
+                        mlflow.log_metric(
+                            f"{graph_type}-{dataset_type}-top5_acc",
+                            top5_acc,
+                            step=i_iter,
+                        )
 
                 for fn in kwargs["model_save_fn"]:
                     current_metric_value = (
@@ -289,7 +321,13 @@ def evaluate_by_sampling_subgraphs(
         # Evaluate on subgraphs sampled from training samples
         score_row.append("Train")
         # Collect predictions by randomly sampling subgraphs
-        node_preds, node_labels, graph_preds, graph_ys, graph_ws = collect_predict_by_random_sample(
+        (
+            node_preds,
+            node_labels,
+            graph_preds,
+            graph_ys,
+            graph_ws,
+        ) = collect_predict_by_random_sample(
             model,
             dataset,
             device,
@@ -313,7 +351,13 @@ def evaluate_by_sampling_subgraphs(
     if valid_inds is not None:
         # Same for validation samples
         score_row.append("Valid")
-        node_preds, node_labels, graph_preds, graph_ys, graph_ws = collect_predict_by_random_sample(
+        (
+            node_preds,
+            node_labels,
+            graph_preds,
+            graph_ys,
+            graph_ws,
+        ) = collect_predict_by_random_sample(
             model,
             dataset,
             device,

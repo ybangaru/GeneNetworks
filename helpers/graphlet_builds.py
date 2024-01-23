@@ -1,7 +1,8 @@
+"""
+Test graphlet counts
+"""
 import networkx as nx
 import pandas as pd
-
-# Assuming you have a NetworkX graph named 'your_graph'
 
 
 def count_graphlets_between_nodes(graph, source, target):

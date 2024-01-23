@@ -1,3 +1,6 @@
+"""
+This module sets up the logging for the project.
+"""
 import logging
 from logging import getLogger
 

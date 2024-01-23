@@ -1,8 +1,5 @@
-# -*- coding: utf-8 -*-
 """
-Created on Tue Nov 16 13:45:39 2021
-
-@author: zhenq
+Helper functions for analyzing embeddings
 """
 
 import numpy as np
@@ -82,7 +79,7 @@ def get_embedding(model, data_list, device, batch_size=64):
         graph_reps = []
         preds = [[], []]
         for i in range(int(num_batches)):
-            batch_data = data_list[i * batch_size : (i + 1) * batch_size]
+            batch_data = data_list[i * batch_size : (i + 1) * batch_size]  # noqa: E203
             data = Batch.from_data_list(batch_data)
             data = data.to(device)
 
@@ -140,7 +137,12 @@ def get_base_adj_mat(data_list):
 
 
 def dimensionality_reduction_combo(
-    embs, n_pca_components=20, cluster_method="kmeans", n_clusters=10, seed=42, tool_saves=None
+    embs,
+    n_pca_components=20,
+    cluster_method="kmeans",
+    n_clusters=10,
+    seed=42,
+    tool_saves=None,
 ):
     """Run a combination of dimensionality reduction and clustering
 
@@ -197,7 +199,13 @@ def dimensionality_reduction_combo(
 
 
 def collect_cluster_label_for_all_nodes(
-    model, dataset, device, tool_saves, inds=None, embedding_from="graph", print_progress=False
+    model,
+    dataset,
+    device,
+    tool_saves,
+    inds=None,
+    embedding_from="graph",
+    print_progress=False,
 ):
     """Extract all subgraphs from the dataset, calculate their embeddings and
     cluster labels
