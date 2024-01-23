@@ -29,3 +29,4 @@ panel
 kaleido
 torchinfo
 opencv-python
+dash-cytoscape

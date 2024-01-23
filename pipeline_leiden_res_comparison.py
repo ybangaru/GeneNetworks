@@ -1,54 +1,9 @@
-import os
 from joblib import Parallel, delayed
 import pandas as pd
-import mlflow
-import scanpy as sc
-from helpers import logger
+from helpers import logger, read_run_result_ann_data, NO_JOBS
 import plotly.express as px
 
-# Read the SLURM_CPUS_PER_TASK environment variable
-SLURM_CPUS_PER_TASK = os.environ.get("SLURM_CPUS_PER_TASK")
-# Set the number of jobs to the value specified in SLURM_CPUS_PER_TASK
-NO_JOBS = int(SLURM_CPUS_PER_TASK) if SLURM_CPUS_PER_TASK is not None else 1
-
-
-mlflow.set_tracking_uri("/data/qd452774/spatial_transcriptomics/mlruns/")
-client = mlflow.tracking.MlflowClient()
-
-
-def get_run_info(x_experiment, x_resolution):
-
-    xexp_name = f"spatial_clustering_{x_experiment}"
-    xrun_name = f"steady-state-using-220-PCs-50-neighbors-leiden-{x_resolution}"
-
-    # Get the experiment ID by name
-    experiment = client.get_experiment_by_name(xexp_name)
-    experiment_id = experiment.experiment_id
-
-    # Search for the run by run name within the specified experiment
-    runs = client.search_runs(experiment_ids=[experiment_id], filter_string=f"tags.run_name='{xrun_name}'")
-
-    # Check if any runs match the criteria
-    if len(runs) > 1:
-        logger.error("more runs are there with same name than expected")
-        return None
-    elif len(runs) == 1:
-        # run = runs.iloc[0]  # Assuming there is only one matching run
-        # run_id = run.run_id
-        return runs[0]
-    else:    
-        logger.debug(f"No matching run found for run name: {xrun_name} in experiment: {xexp_name}")
-        return None
-
-
-def read_run_result_ann_data(data_filter_name, x_resolution):
-
-    xrun_info = get_run_info(data_filter_name, x_resolution)
-    exp_id = xrun_info.info.experiment_id
-    run_id = xrun_info.info.run_id
-    x_anndata_path = f"/data/qd452774/spatial_transcriptomics/mlruns/{exp_id}/{run_id}/artifacts/data/spatial_clustering_ss_{data_filter_name}.h5ad"
-    x_data = sc.read_h5ad(x_anndata_path)
-    return x_data
+from .helpers import PROJECT_DIR
 
 
 def build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_name, x_resolution, y_resolution, transformation=None):
@@ -81,7 +36,6 @@ def build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_n
 
     # Fill NaN values with zeros
     heatmap_data = heatmap_data.fillna(0)
-
 
     # Create the heatmap using Plotly
     x_label = f"{x_data_filter_name} - leiden clusters - {x_resolution} resolution"
@@ -124,23 +78,6 @@ def build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_n
     return fig
 
 
-# y_data_filter_name = "Liver12Slice12"
-# y_resolution = 0.6
-# y_data = read_run_result_ann_data(y_data_filter_name, y_resolution)
-
-# x_data_filter_name = "Liver2Slice1"
-# x_resolution = 0.6
-# x_data = read_run_result_ann_data(x_data_filter_name, x_resolution)
-
-# # print(heatmap_data)
-
-# transformation = "vertical-percentage"
-# fig = build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_name, x_resolution, y_resolution, transformation)
-# fig.show()
-
-# # Now you can access the common_cells_dict and missing_cells_dict to get the cell IDs for each category combination.
-# # print(x_data)
-
 def run_parallel_comparison(combinations):
     logger.info(f"{NO_JOBS} jobs are being used")
     Parallel(n_jobs=NO_JOBS)(delayed(build_cluster_comparison)(f) for f in combinations)
@@ -159,7 +96,7 @@ def build_cluster_comparison(info_tuple):
     x_data = read_run_result_ann_data(x_data_filter_name, x_resolution)
     y_data = read_run_result_ann_data(y_data_filter_name, y_resolution)
 
-    directory_run = f"/data/qd452774/spatial_transcriptomics/assets/cluster_comparison"
+    directory_run = f"{PROJECT_DIR}/assets/cluster_comparison"
 
     fig = build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_name, x_resolution, y_resolution)
     fig_name = f"{x_data_filter_name}={x_resolution}-{y_data_filter_name}={y_resolution}"
@@ -183,7 +120,7 @@ def main():
     logger.info("Starting the script")
 
     x_experiments = ["Liver12Slice12"]
-    x_resolutions = [0.7] #[0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+    x_resolutions = [0.7]  # [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 
     y_experiments = ["Liver1Slice1", "Liver1Slice2", "Liver1Slice12", "Liver2Slice1", "Liver2Slice2", "Liver2Slice12"]
     y_resolutions = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1]
@@ -193,7 +130,6 @@ def main():
     for exp in x_experiments:
         for resol in x_resolutions:
             exp_config.append((exp, resol))
-
 
     final_config = []
     for exp_x in exp_config:

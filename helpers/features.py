@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Mon April 3 14:53:02 2023
-
-@author: zqwu
+Helper functions for processing node/edge features
 """
 
 import numpy as np
@@ -13,18 +9,20 @@ import warnings
 import torch
 import torch_geometric as tg
 
-from spacegm.utils import EDGE_TYPES
-from helpers import logger, extract_boundary_features
+from .experiment_config import EDGE_TYPES
+from .graph_build import extract_boundary_features
 
 
-def process_biomarker_expression(G,
-                                 node_ind,
-                                 biomarkers=None,
-                                 biomarker_expression_process_method='raw',
-                                 biomarker_expression_lower_bound=-3,
-                                 biomarker_expression_upper_bound=3,
-                                 **kwargs):
-    """ Process biomarker expression
+def process_biomarker_expression(
+    G,
+    node_ind,
+    biomarkers=None,
+    biomarker_expression_process_method="raw",
+    biomarker_expression_lower_bound=-3,
+    biomarker_expression_upper_bound=3,
+    **kwargs
+):
+    """Process biomarker expression
 
     Args:
         G (nx.Graph): full cellular graph of the region
@@ -42,7 +40,7 @@ def process_biomarker_expression(G,
     bm_exp_vec = []
     for bm in biomarkers:
         if bm_exp_dict is None or bm not in bm_exp_dict:
-            bm_exp_vec.append(0.)
+            bm_exp_vec.append(0.0)
         else:
             bm_exp_vec.append(float(bm_exp_dict[bm]))
 
@@ -50,18 +48,18 @@ def process_biomarker_expression(G,
     lb = biomarker_expression_lower_bound
     ub = biomarker_expression_upper_bound
 
-    if biomarker_expression_process_method == 'raw':
+    if biomarker_expression_process_method == "raw":
         return list(bm_exp_vec)
-    elif biomarker_expression_process_method == 'linear':
+    elif biomarker_expression_process_method == "linear":
         bm_exp_vec = np.clip(bm_exp_vec, lb, ub)
         bm_exp_vec = (bm_exp_vec - lb) / (ub - lb)
         return list(bm_exp_vec)
-    elif biomarker_expression_process_method == 'log':
+    elif biomarker_expression_process_method == "log":
         bm_exp_vec = np.clip(np.log(bm_exp_vec + 1e-9), lb, ub)
         bm_exp_vec = (bm_exp_vec - lb) / (ub - lb)
         return list(bm_exp_vec)
-    elif biomarker_expression_process_method == 'rank':
-        bm_exp_vec = rankdata(bm_exp_vec, method='min')
+    elif biomarker_expression_process_method == "rank":
+        bm_exp_vec = rankdata(bm_exp_vec, method="min")
         num_exp = len(bm_exp_vec)
         bm_exp_vec = (bm_exp_vec - 1) / (num_exp - 1)
         return list(bm_exp_vec)
@@ -69,12 +67,8 @@ def process_biomarker_expression(G,
         raise ValueError("expression process method %s not recognized" % biomarker_expression_process_method)
 
 
-def process_neighbor_composition(G,
-                                 node_ind,
-                                 cell_type_mapping=None,
-                                 neighborhood_size=10,
-                                 **kwargs):
-    """ Calculate the composition vector of k-nearest neighboring cells
+def process_neighbor_composition(G, node_ind, cell_type_mapping=None, neighborhood_size=10, **kwargs):
+    """Calculate the composition vector of k-nearest neighboring cells
 
     Args:
         G (nx.Graph): full cellular graph of the region
@@ -98,22 +92,18 @@ def process_neighbor_composition(G,
         neighbors = {n: feat_dict["center_coord"] for n, feat_dict in ego_g.nodes.data()}
 
     closest_neighbors = sorted(neighbors.keys(), key=lambda x: node_dist(center_coord, neighbors[x]))
-    closest_neighbors = closest_neighbors[1:(neighborhood_size + 1)]
+    closest_neighbors = closest_neighbors[1 : (neighborhood_size + 1)]  # noqa: E203
 
     comp_vec = np.zeros((len(cell_type_mapping),))
     for n in closest_neighbors:
-        cell_type = cell_type_mapping[G.nodes[n]["cell_type"]]
+        cell_type = cell_type_mapping[kwargs["annotation_cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
         comp_vec[cell_type] += 1
     comp_vec = list(comp_vec / comp_vec.sum())
     return comp_vec
 
 
-def process_edge_distance(G,
-                          edge_ind,
-                          log_distance_lower_bound=2.,
-                          log_distance_upper_bound=5.,
-                          **kwargs):
-    """ Process edge distance, distance will be log-transformed and min-max normalized
+def process_edge_distance(G, edge_ind, log_distance_lower_bound=2.0, log_distance_upper_bound=5.0, **kwargs):
+    """Process edge distance, distance will be log-transformed and min-max normalized
 
     Default parameters assume distances are usually within the range: 10-100 pixels / 3.7-37 um
 
@@ -128,13 +118,16 @@ def process_edge_distance(G,
     """
     dist = G.edges[edge_ind]["distance"]
     log_dist = np.log(dist + 1e-5)
-    _d = np.clip((log_dist - log_distance_lower_bound) /
-                 (log_distance_upper_bound - log_distance_lower_bound), 0, 1)
+    _d = np.clip(
+        (log_dist - log_distance_lower_bound) / (log_distance_upper_bound - log_distance_lower_bound),
+        0,
+        1,
+    )
     return [_d]
 
 
 def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwargs):
-    """ Process a single node/edge feature item
+    """Process a single node/edge feature item
 
     The following feature items are supported, note that some of them require
     keyword arguments in `feature_kwargs`:
@@ -174,9 +167,15 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
     if node_ind is not None and edge_ind is None:
         if feature_item == "cell_type":
             # Integer index of the cell type
-            assert "cell_type_mapping" in feature_kwargs, \
-                "'cell_type_mapping' is required in the kwargs for feature item 'cell_type'"
-            v = [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
+            assert (
+                "cell_type_mapping" in feature_kwargs
+            ), "'cell_type_mapping' is required in the kwargs for feature item 'cell_type'"
+            v = [
+                feature_kwargs["cell_type_mapping"][
+                    feature_kwargs["annotation_cell_type_mapping"][G.nodes[node_ind]["cell_type"]]
+                ]
+            ]
+            # [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
             return v
         elif feature_item == "center_coord":
             # Coordinates of the cell centroid
@@ -184,29 +183,33 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
             return v
         elif feature_item == "biomarker_expression":
             # Biomarker expression of the cell
-            assert "biomarkers" in feature_kwargs, \
-                "'biomarkers' is required in the kwargs for feature item 'biomarker_expression'"
+            assert (
+                "biomarkers" in feature_kwargs
+            ), "'biomarkers' is required in the kwargs for feature item 'biomarker_expression'"
             v = process_biomarker_expression(G, node_ind, **feature_kwargs)
             return v
         elif feature_item == "neighborhood_composition":
             # Composition vector of the k-nearest neighboring cells
-            assert "cell_type_mapping" in feature_kwargs, \
-                "'cell_type_mapping' is required in the kwargs for feature item 'neighborhood_composition'"
+            assert (
+                "cell_type_mapping" in feature_kwargs
+            ), "'cell_type_mapping' is required in the kwargs for feature item 'neighborhood_composition'"
             v = process_neighbor_composition(G, node_ind, **feature_kwargs)
             return v
-        elif feature_item == "voronoi_polygon":
-            v = extract_boundary_features(G.nodes[node_ind]["voronoi_polygon"])
+        elif feature_item == "voronoi_polygon" or feature_item == "boundary_polygon":
+            v = extract_boundary_features(G.nodes[node_ind][feature_item])
             return v
         elif feature_item == "cell_type_revealed":
             v = [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
-            return v        
+            return v
         elif feature_item in G.nodes[node_ind]:
-            # Additional features specified by users, e.g. "SIZE" in the example
+            # Additional features specified by users, e.g. "volume" in the example
             v = [G.nodes[node_ind][feature_item]]
             return v
         else:
-            raise ValueError("Feature %s not found in the node attributes of graph %s, node %s" %
-                             (feature_item, G.region_id, str(node_ind)))
+            raise ValueError(
+                "Feature %s not found in the node attributes of graph %s, node %s"
+                % (feature_item, G.region_id, str(node_ind))
+            )
 
     # Edge features
     elif edge_ind is not None and node_ind is None:
@@ -220,22 +223,27 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
             v = [G.edges[edge_ind][feature_item]]
             return v
         else:
-            raise ValueError("Feature %s not found in the edge attributes of graph %s, edge %s" %
-                             (feature_item, G.region_id, str(edge_ind)))
+            raise ValueError(
+                "Feature %s not found in the edge attributes of graph %s, edge %s"
+                % (feature_item, G.region_id, str(edge_ind))
+            )
 
     else:
         raise ValueError("One of node_ind or edge_ind should be specified")
 
 
-def nx_to_tg_graph(G,
-                   node_features=["cell_type",
-                                  "biomarker_expression",
-                                  "neighborhood_composition",
-                                  "center_coord"],
-                   edge_features=["edge_type",
-                                  "distance"],
-                   **feature_kwargs):
-    """ Build pyg data objects from nx graphs
+def nx_to_tg_graph(
+    G,
+    node_features=[
+        "cell_type",
+        "biomarker_expression",
+        "neighborhood_composition",
+        "center_coord",
+    ],
+    edge_features=["edge_type", "distance"],
+    **feature_kwargs
+):
+    """Build pyg data objects from nx graphs
 
     Args:
         G (nx.Graph): full cellular graph of the region
@@ -263,12 +271,13 @@ def nx_to_tg_graph(G,
         assert np.all(sub_G.nodes == np.arange(len(sub_G)))
 
         # Append node and edge features to the pyg data object
-        data = {"x": [], "edge_attr": [], "edge_index": []}
+        data = {"x": [], "edge_attr": [], "edge_index": [], "is_padding": []}
         for node_ind in sub_G.nodes:
             feat_val = []
             for key in node_features:
                 feat_val.extend(process_feature(sub_G, key, node_ind=node_ind, **feature_kwargs))
             data["x"].append(feat_val)
+            data["is_padding"].append(sub_G.nodes[node_ind]["is_padding"])
 
         for edge_ind in sub_G.edges:
             feat_val = []
@@ -281,7 +290,7 @@ def nx_to_tg_graph(G,
 
         for key, item in data.items():
             data[key] = torch.tensor(item)
-        data['edge_index'] = data['edge_index'].t().long()
+        data["edge_index"] = data["edge_index"].t().long()
         data = tg.data.Data.from_dict(data)
         data.num_nodes = sub_G.number_of_nodes()
         data.region_id = G.region_id
@@ -290,7 +299,7 @@ def nx_to_tg_graph(G,
 
 
 def get_feature_names(features, cell_type_mapping=None, biomarkers=None):
-    """ Helper fn for getting a list of feature names from a list of feature items
+    """Helper fn for getting a list of feature names from a list of feature items
 
     Args:
         features (list): list of feature items
@@ -315,13 +324,18 @@ def get_feature_names(features, cell_type_mapping=None, biomarkers=None):
         elif feat == "neighborhood_composition":
             # feature "neighborhood_composition" will contain a composition vector of the immediate neighbors
             # The vector will have the same length as the number of unique cell types
-            feat_names.extend(["neighborhood_composition-%s" % ct
-                               for ct in sorted(cell_type_mapping.keys(), key=lambda x: cell_type_mapping[x])])
+            feat_names.extend(
+                [
+                    "neighborhood_composition-%s" % ct
+                    for ct in sorted(cell_type_mapping.keys(), key=lambda x: cell_type_mapping[x])
+                ]
+            )
         elif feat == "voronoi_polygon":
-            # TODO: handle different variations of feature extractions and 
-            # respective feature names generation dynamically
-            # feature "voronoi_polygon" will contain a list of hu moments
+            # TODO: feature "voronoi_polygon" will contain a list of hu moments /
+            # handle variations in feature length
             feat_names.extend(["voronoi_polygon-%s" % i for i in range(1, 8)])
+        elif feat == "boundary_polygon":
+            feat_names.extend(["boundary_polygon-%s" % i for i in range(1, 8)])
         else:
             warnings.warn("Using additional feature: %s" % feat)
             feat_names.append(feat)

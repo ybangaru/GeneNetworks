@@ -1,26 +1,22 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Mon Aug 16 20:50:26 2021
-
-@author: zqwu
+Provide functions for node classification model inference and evaluation
 """
-
+import torch
 import numpy as np
 from scipy.special import softmax
 from sklearn.metrics import roc_auc_score, r2_score
 from torch_geometric.data import Batch
-
-from spacegm.data import SubgraphSampler
 from concurrent.futures import ThreadPoolExecutor
 
-from helpers import NO_JOBS
+from .data import SubgraphSampler
+from .local_config import NO_JOBS
+
 
 def get_num_nodes(dataset, i):
     return dataset.get_full(i).x.shape[0]
 
 
-def predict_on_batch(batch, model, device):
+def predict_on_batch(batch, model, device, dataset):
     """Wrapper function for generating predictions on a batch of subgraphs
 
     Args:
@@ -39,15 +35,51 @@ def predict_on_batch(batch, model, device):
     graph_preds = None
 
     res = model(_batch)
+
     if model.num_node_tasks > 0:
         node_preds = res[0].cpu().data.numpy()
     if model.num_graph_tasks > 0:
         graph_preds = res[-1].cpu().data.numpy()
-    return node_preds, graph_preds
+
+    _, node_pred = res[0].max(dim=1)
+    node_y = _batch.node_y
+    confusion_matrix_info = {
+        "node_y": node_y.cpu().numpy(),
+        "node_pred": node_pred.cpu().numpy(),
+    }
+    # confusion_matrix_fig = plotly_confusion_matrix(node_y.cpu().numpy(), node_pred.cpu().numpy(), labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_annotation_mapping.keys()))
+    node_probs = torch.nn.functional.softmax(res[0], dim=1).detach().cpu().numpy()
+    precision_recall_info = {
+        "node_y": node_y.cpu().numpy(),
+        "node_probs": node_probs,
+    }
+    # precision_recall_fig = plotly_precision_recall_curve(node_y.cpu().numpy(), node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
+    node_embeddings = res[-1].detach().cpu().numpy()
+    return (
+        node_preds,
+        graph_preds,
+        confusion_matrix_info,
+        precision_recall_info,
+        node_embeddings,
+    )
 
 
-def save_pred(batch, node_preds, graph_preds, node_results, graph_results, region_ids):
-    """ Assign batch prediction results to dictionary of prediction
+def save_pred(
+    dataset,
+    batch,
+    node_preds,
+    graph_preds,
+    confusion_matrix_info,
+    precision_recall_info,
+    node_embeddings,
+    node_results,
+    graph_results,
+    region_ids,
+    confusion_matrix_results,
+    precision_recall_results,
+    node_embeddings_results,
+):
+    """Assign batch prediction results to dictionary of prediction
 
     Args:
         batch (list): list of pyg data objects, subgraphs
@@ -65,18 +97,26 @@ def save_pred(batch, node_preds, graph_preds, node_results, graph_results, regio
         if graph_preds is not None:
             if i in graph_results and graph_results[i][j] is None:
                 graph_results[i][j] = graph_preds[ind]
+
+    confusion_matrix_results.append(confusion_matrix_info)
+    precision_recall_results.append(precision_recall_info)
+    node_embeddings_results.append(node_embeddings)
+
+    # node_y_val = np.concatenate([item["node_y"] for item in confusion_matrix_results])
+    # node_pred_val = np.concatenate([item["node_pred"] for item in confusion_matrix_results])
+    # confusion_matrix_fig = plotly_confusion_matrix(node_y_val, node_pred_val, labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_annotation_mapping.keys()))
+    # confusion_matrix_fig.write_html(f"results/confusion_matrix_{len(node_y_val)}.html")
+
+    # node_probs = np.concatenate([item["node_probs"] for item in precision_recall_results])
+    # precision_recall_fig = plotly_precision_recall_curve(node_y_val, node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
+    # precision_recall_fig.write_html(f"results/precision_recall_{len(node_y_val)}.html")
+
     return
 
 
-def collect_predict_for_all_nodes(model,
-                                  dataset,
-                                  device,
-                                  inds=None,
-                                  batch_size=64,
-                                  shuffle=False,
-                                  subsample_ratio=1.0,
-                                  print_progress=False,
-                                  **kwargs):
+def collect_predict_for_all_nodes(
+    model, dataset, device, inds=None, batch_size=64, shuffle=False, subsample_ratio=1.0, print_progress=False, **kwargs
+):
     """Collect predictions on all cells/nodes from the dataset
 
     Args:
@@ -106,6 +146,9 @@ def collect_predict_for_all_nodes(model,
 
     node_results = {}
     graph_results = {}
+    confusion_matrix_results = []
+    precision_recall_results = []
+    node_embeddings_results = []
 
     if dataset.subgraph_size > 0:
         # Predicting on subgraphs
@@ -121,10 +164,10 @@ def collect_predict_for_all_nodes(model,
         # for i in inds:
 
         def process_index(i):
-            nonlocal node_results, graph_results
+            nonlocal node_results, graph_results, confusion_matrix_results, precision_recall_results, node_embeddings_results
             if print_progress:
                 print("predict on %d" % i)
-            if dataset.subgraph_source == 'chunk_save':
+            if dataset.subgraph_source == "chunk_save":
                 dataset.clear_cache()
                 dataset.load_to_cache(i, subgraphs=True)
             batch = []
@@ -132,18 +175,61 @@ def collect_predict_for_all_nodes(model,
             all_inds = np.arange(get_num_nodes(dataset, i))
             if shuffle:
                 np.random.shuffle(all_inds)
-            for j in all_inds[:int(subsample_ratio * len(all_inds))]:
+            for j in all_inds[: int(subsample_ratio * len(all_inds))]:
                 data = dataset.get_subgraph(i, j)
                 for transform_fn in dataset.transform:
                     data = transform_fn(data)
                 batch.append(data)
                 if len(batch) == batch_size:
-                    node_preds, graph_preds = predict_on_batch(batch, model, device)
-                    save_pred(batch, node_preds, graph_preds, node_results, graph_results, region_ids)
+                    (
+                        node_preds,
+                        graph_preds,
+                        confusion_matrix_info,
+                        precision_recall_info,
+                        node_embeddings,
+                    ) = predict_on_batch(batch, model, device, dataset)
+                    # confusion_matrix_results.append(confusion_matrix_info)
+                    # precision_recall_results.append(precision_recall_info)
+                    # node_embeddings_results.append(node_embeddings)
+                    save_pred(
+                        dataset,
+                        batch,
+                        node_preds,
+                        graph_preds,
+                        confusion_matrix_info,
+                        precision_recall_info,
+                        node_embeddings,
+                        node_results,
+                        graph_results,
+                        region_ids,
+                        confusion_matrix_results,
+                        precision_recall_results,
+                        node_embeddings_results,
+                    )
                     batch = []
             if len(batch) > 0:
-                node_preds, graph_preds = predict_on_batch(batch, model, device)
-                save_pred(batch, node_preds, graph_preds, node_results, graph_results, region_ids)
+                (
+                    node_preds,
+                    graph_preds,
+                    confusion_matrix_info,
+                    precision_recall_info,
+                    node_embeddings,
+                ) = predict_on_batch(batch, model, device, dataset)
+                save_pred(
+                    dataset,
+                    batch,
+                    node_preds,
+                    graph_preds,
+                    confusion_matrix_info,
+                    precision_recall_info,
+                    node_embeddings,
+                    node_results,
+                    graph_results,
+                    region_ids,
+                    confusion_matrix_results,
+                    precision_recall_results,
+                    node_embeddings_results,
+                )
 
         with ThreadPoolExecutor(max_workers=NO_JOBS) as executor:
             executor.map(process_index, inds)
@@ -165,17 +251,18 @@ def collect_predict_for_all_nodes(model,
         with ThreadPoolExecutor(max_workers=NO_JOBS) as executor:
             executor.map(process_index, inds)
 
-    return node_results, graph_results
+    return (
+        node_results,
+        graph_results,
+        confusion_matrix_results,
+        precision_recall_results,
+        node_embeddings_results,
+    )
 
 
-def collect_predict_by_random_sample(model,
-                                     dataset,
-                                     device,
-                                     inds=None,
-                                     batch_size=64,
-                                     num_eval_iterations=300,
-                                     num_workers=0,
-                                     **kwargs):
+def collect_predict_by_random_sample(
+    model, dataset, device, inds=None, batch_size=64, num_eval_iterations=300, num_workers=0, **kwargs
+):
     """Collect predictions on randomly sampled subgraphs from the dataset
 
     Args:
@@ -207,14 +294,16 @@ def collect_predict_by_random_sample(model,
         inds = np.arange(dataset.N)
 
     original_subgraph_source = dataset.subgraph_source
-    dataset.subgraph_source = 'on-the-fly'
+    dataset.subgraph_source = "on-the-fly"
 
-    data_iter = SubgraphSampler(dataset,
-                                selected_inds=inds,
-                                batch_size=batch_size,
-                                num_regions_per_segment=0,
-                                steps_per_segment=int(num_eval_iterations),
-                                num_workers=num_workers)
+    data_iter = SubgraphSampler(
+        dataset,
+        selected_inds=inds,
+        batch_size=batch_size,
+        num_regions_per_segment=0,
+        steps_per_segment=int(num_eval_iterations),
+        num_workers=num_workers,
+    )
 
     node_preds = []
     node_labels = []
@@ -276,8 +365,7 @@ def cell_type_prediction_evaluate_fn(node_preds, node_labels, print_res=True):
     top3_acc = (_labels == pred_order[:, -3:]).sum() / node_labels.size
     top5_acc = (_labels == pred_order[:, -5:]).sum() / node_labels.size
     if print_res:
-        print("NODE Avg-pred: %.2f, Acc top-1 %.2f; top-3 %.2f; top-5 %.2f" %
-              (avg_pred, top1_acc, top3_acc, top5_acc))
+        print("NODE Avg-pred: %.2f, Acc top-1 %.2f; top-3 %.2f; top-5 %.2f" % (avg_pred, top1_acc, top3_acc, top5_acc))
     return [avg_pred, top1_acc, top3_acc, top5_acc]
 
 
@@ -299,11 +387,8 @@ def cell_bm_exp_prediction_evaluate_fn(node_preds, node_labels, print_res=True):
     return r2s
 
 
-def graph_classification_evaluate_fn(graph_preds,
-                                     graph_ys,
-                                     graph_ws=None,
-                                     print_res=True):
-    """ Evaluate graph classification accuracy
+def graph_classification_evaluate_fn(graph_preds, graph_ys, graph_ws=None, print_res=True):
+    """Evaluate graph classification accuracy
 
     Args:
         graph_preds (array-like): binary classification logits for graph-level tasks, (num_subgraphs, num_tasks)
@@ -362,12 +447,7 @@ def full_graph_cell_bm_exp_prediction_evaluate_fn(dataset, node_results, print_r
     return cell_bm_exp_prediction_evaluate_fn(node_preds, node_labels, print_res=print_res)
 
 
-def full_graph_graph_classification_evaluate_fn(
-        dataset,
-        graph_results,
-        aggr='mean',
-        print_res=True):
-
+def full_graph_graph_classification_evaluate_fn(dataset, graph_results, aggr="mean", print_res=True):
     n_tasks = dataset[0].graph_y.data.numpy().size
     graph_preds = []
     graph_ys = []
@@ -376,7 +456,7 @@ def full_graph_graph_classification_evaluate_fn(
         graph_pred = [p for p in graph_results[i] if ((p is not None) and np.all(p == p))]
         graph_pred = np.stack(graph_pred, 0)
 
-        if aggr == 'mean':
+        if aggr == "mean":
             graph_pred = np.nanmean(graph_pred, 0)
         else:
             raise NotImplementedError("Only mean-aggregation is supported now")
