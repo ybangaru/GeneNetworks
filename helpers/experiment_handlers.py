@@ -447,6 +447,7 @@ class spatialPipeline:
                     if idx != i:
                         G.add_edge(i, idx)
 
+        # TODO: add logic for other edge types from graph_build.build_graph_from_cell_coords
         elif edge_logic["type"] == "MST":
             # logic for minimum spanning tree of a network
             pass

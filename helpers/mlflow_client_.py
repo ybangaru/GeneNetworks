@@ -50,7 +50,7 @@ def read_run_result_ann_data(data_filter_name, x_resolution):
     return x_data
 
 
-def read_run_node_true_pred_labels(experiment_id, run_id):
+def read_run_node_true_pred_labels(experiment_id, run_id, pred_as_dist=None):
     true_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/node_class"
     pred_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/node_probs"
 
@@ -90,7 +90,10 @@ def read_run_node_true_pred_labels(experiment_id, run_id):
             "pred_labels": pred_labels,
         }
     )
-    df["pred_labels"] = df["pred_labels"].apply(lambda x: np.argmax(x, axis=1))
+
+    if not pred_as_dist:
+        df["pred_labels"] = df["pred_labels"].apply(lambda x: np.argmax(x, axis=1))
+
     assert (df["true_num"] == df["pred_num"]).all()
     df["Number"] = df["true_num"]
     df = df.drop(["true_num", "pred_num"], axis=1)

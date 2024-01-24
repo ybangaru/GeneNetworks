@@ -4,10 +4,12 @@ results.
 """
 import pandas as pd
 import numpy as np
-from sklearn.metrics import confusion_matrix
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from sklearn.metrics import precision_recall_curve, auc, confusion_matrix, roc_curve, classification_report
+from sklearn.preprocessing import label_binarize
+
 
 # TODO: Build sklearn.metrics classification report animation as well
 
@@ -20,7 +22,7 @@ from .plotly_helpers import COLORS_LIST
 from .experiment_config import ANNOTATION_DICT
 
 
-def build_embeddings_anime_2d(experiment_id, run_id):
+def plotly_embeddings_anime_2d(experiment_id, run_id):
     df = read_run_embeddings_df(experiment_id, run_id)
 
     num_iterations = int(df["Number"].max() / 10)
@@ -78,7 +80,7 @@ def build_embeddings_anime_2d(experiment_id, run_id):
     return fig
 
 
-def build_embeddings_anime_3d(experiment_id, run_id):
+def plotly_embeddings_anime_3d(experiment_id, run_id):
     df = read_run_embeddings_df(experiment_id, run_id)
 
     num_iterations = int(df["Number"].max() / 10)
@@ -144,7 +146,7 @@ def create_confusion_matrix(true_labels, pred_labels, labels):
     return cm_normalized
 
 
-def build_confusion_matrix_anime(experiment_id, run_id):
+def plotly_confusion_matrix_anime(experiment_id, run_id):
     df = read_run_node_true_pred_labels(experiment_id, run_id)
     act_labels = [int(item) for item in ANNOTATION_DICT.keys()]
     df["normalized_confusion_matrix"] = df.apply(
@@ -253,6 +255,69 @@ def build_confusion_matrix_anime(experiment_id, run_id):
     return fig
 
 
+def plotly_precision_recall_curve_anime(experiment_id, run_id):
+    class_names = [int(item) for item in list(ANNOTATION_DICT.keys())]
+    df = read_run_node_true_pred_labels(experiment_id, run_id, pred_as_dist=True)
+
+    # TODO: add attribute for filtering iterations in read_run_node_true_pred_labels
+    df = df[df["Number"] % 20 == 0]
+
+    df["probability_labels"] = df.apply(
+        lambda row: row["pred_labels"][np.arange(len(row["true_labels"])), row["true_labels"]], axis=1
+    )
+    df["true_labels_bin"] = df.apply(lambda row: label_binarize(row["true_labels"], classes=class_names), axis=1)
+
+    plot_data = []
+
+    for item in class_names:
+        df[f"precision_recall_bs_{item}"] = df.apply(
+            lambda row: precision_recall_curve(row["true_labels_bin"][:, item], row["pred_labels"][:, item]), axis=1
+        )
+        df[f"roc_curve_bs_{item}"] = df.apply(
+            lambda row: roc_curve(row["true_labels_bin"][:, item], row["pred_labels"][:, item]), axis=1
+        )
+        df[f"precision_{item}"] = df.apply(lambda row: row[f"precision_recall_bs_{item}"][0], axis=1)
+        df[f"recall_{item}"] = df.apply(lambda row: row[f"precision_recall_bs_{item}"][1], axis=1)
+        df[f"tpr_{item}"] = df.apply(lambda row: row[f"roc_curve_bs_{item}"][0], axis=1)
+        df[f"fpr_{item}"] = df.apply(lambda row: row[f"roc_curve_bs_{item}"][1], axis=1)
+        # df[f"auc_{item}"] = df.apply(lambda row: auc(row[f"precision_{item}"], row[f"recall_{item}"]), axis=1)
+
+        temp_df = (
+            df[[f"precision_{item}", f"recall_{item}", "Number"]]
+            .explode([f"precision_{item}", f"recall_{item}"])
+            .reset_index(drop=True)
+        )
+        temp_df = temp_df.rename(
+            columns={
+                f"precision_{item}": "precision",
+                f"recall_{item}": "recall",
+            }
+        )
+        temp_df["precision"] = temp_df["precision"].astype(float)
+        temp_df["recall"] = temp_df["recall"].astype(float)
+        temp_df["cell_type"] = [ANNOTATION_DICT[str(item)]] * len(temp_df)
+        plot_data.append(temp_df)
+
+    unique_colors = sorted(list(ANNOTATION_DICT.values()))
+    unique_colors.sort()
+    color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
+
+    plot_data = pd.concat(plot_data)
+
+    fig = px.line(
+        plot_data,
+        x="precision",
+        y="recall",
+        animation_frame="Number",
+        color="cell_type",
+        color_discrete_map=color_dict,
+        labels={"precision": "Precision", "recall": "Recall"},
+        title="Precision and Recall for each Cell Type",
+    )
+
+    return fig
+
+
 def main():
     from .local_config import PROJECT_DIR
 
@@ -261,13 +326,13 @@ def main():
     run_ids = [run.info.run_uuid for run in my_runs]
     run_id = run_ids[0]
 
-    confusion_matrix_fig = build_confusion_matrix_anime(exp_id, run_id)
+    confusion_matrix_fig = plotly_confusion_matrix_anime(exp_id, run_id)
     confusion_matrix_fig.write_html(f"{PROJECT_DIR}/test_confusion_matrix.html")
 
-    emb_fig = build_embeddings_anime_2d(exp_id, run_id)
+    emb_fig = plotly_embeddings_anime_2d(exp_id, run_id)
     emb_fig.write_html(f"{PROJECT_DIR}/test_embeddings_2d.html")
 
-    emb_fig_3d = build_embeddings_anime_3d(exp_id, run_id)
+    emb_fig_3d = plotly_embeddings_anime_3d(exp_id, run_id)
     emb_fig_3d.write_html(f"{PROJECT_DIR}/test_embeddings_3d.html")
 
 
