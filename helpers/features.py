@@ -96,7 +96,7 @@ def process_neighbor_composition(G, node_ind, cell_type_mapping=None, neighborho
 
     comp_vec = np.zeros((len(cell_type_mapping),))
     for n in closest_neighbors:
-        cell_type = cell_type_mapping[kwargs["annotation_cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
+        cell_type = cell_type_mapping[kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
         comp_vec[cell_type] += 1
     comp_vec = list(comp_vec / comp_vec.sum())
     return comp_vec
@@ -170,11 +170,7 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
             assert (
                 "cell_type_mapping" in feature_kwargs
             ), "'cell_type_mapping' is required in the kwargs for feature item 'cell_type'"
-            v = [
-                feature_kwargs["cell_type_mapping"][
-                    feature_kwargs["annotation_cell_type_mapping"][G.nodes[node_ind]["cell_type"]]
-                ]
-            ]
+            v = [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
             # [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
             return v
         elif feature_item == "center_coord":

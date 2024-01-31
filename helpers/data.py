@@ -104,13 +104,10 @@ class CellularGraphDataset(Dataset):
             (
                 self.cell_type_mapping,
                 self.cell_type_freq,
-                self.cell_annotation_mapping,
             ) = get_cell_type_metadata(nx_graph_files)
         else:
             self.cell_type_mapping = cell_type_mapping
             self.cell_type_freq = cell_type_freq
-
-        self.annotation_cell_type_mapping = {v: k for k, v in ANNOTATION_DICT.items()}
 
         # Find all available biomarkers for cells in the dataset
         if biomarkers is None:
@@ -143,8 +140,6 @@ class CellularGraphDataset(Dataset):
         self.feature_kwargs["cell_type_mapping"] = self.cell_type_mapping
         self.feature_kwargs["biomarkers"] = self.biomarkers
         self.feature_kwargs["cell_type_freq"] = self.cell_type_freq
-        self.feature_kwargs["annotation_freq_mapping"] = self.cell_annotation_mapping
-        self.feature_kwargs["annotation_cell_type_mapping"] = self.annotation_cell_type_mapping
 
         # Note this command below calls the `process` function
         super(CellularGraphDataset, self).__init__(root, None, pre_transform)
@@ -262,8 +257,6 @@ class CellularGraphDataset(Dataset):
 
         logger.info("Starting processing of %d graphs" % len(self.raw_file_names))
         all_nx_files = [os.path.join(self.raw_dir, file_item) for file_item in self.raw_file_names]
-        # for file_name in all_nx_files[200:]:
-        #     save_file(file_name)
         run_parallel_processing(all_nx_files)
         logger.info("Done processing of %d graphs" % len(self.raw_file_names))
         return

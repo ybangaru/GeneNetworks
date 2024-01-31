@@ -205,6 +205,8 @@ def train_subgraph(
                         valid_inds=valid_inds,
                         batch_size=batch_size,
                         num_workers=num_workers,
+                        mlflow_run=run,
+                        i_iter=i_iter,
                         **kwargs,
                     )
                     graph_type, *_rest_test_valid = result_list
@@ -287,6 +289,8 @@ def evaluate_by_sampling_subgraphs(
     num_eval_iterations=300,
     num_workers=0,
     score_file=None,
+    mlflow_run=None,
+    i_iter=None,
     **kwargs,
 ):
     """Callback function for evaluating GNN predictions on randomly sampled subgraphs
@@ -324,6 +328,7 @@ def evaluate_by_sampling_subgraphs(
         (
             node_preds,
             node_labels,
+            node_probs,
             graph_preds,
             graph_ys,
             graph_ws,
@@ -354,6 +359,7 @@ def evaluate_by_sampling_subgraphs(
         (
             node_preds,
             node_labels,
+            node_probs,
             graph_preds,
             graph_ys,
             graph_ws,
@@ -376,6 +382,35 @@ def evaluate_by_sampling_subgraphs(
             assert graph_task_evaluate_fn is not None, "Please specify `graph_task_evaluate_fn` in the training kwargs"
             score_row.append("graph-score")
             score_row.extend(graph_task_evaluate_fn(graph_preds, graph_ys, graph_ws, print_res=False))
+
+        # embeddings = model.gnn.x_embedding.weight.detach().cpu().numpy()
+        node_classes = node_labels
+        node_classes_pred = node_preds
+        node_probs = node_probs
+
+        directory_run_artifacts = (
+            f"{MLFLOW_TRACKING_URI}{mlflow_run.info.experiment_id}/{mlflow_run.info.run_id}/artifacts/eval"
+        )
+        for item in [
+            "embeddings",
+            "node_probs",
+            "node_class",
+            "node_class_pred",
+            "model",
+            "scorefile",
+        ]:
+            if not os.path.exists(f"{directory_run_artifacts}/{item}"):
+                os.makedirs(f"{directory_run_artifacts}/{item}")
+
+        # embedding_filename = f"{directory_run_artifacts}/embeddings/{i_iter}.npy"
+        node_probs_filename = f"{directory_run_artifacts}/node_probs/{i_iter}.npy"
+        node_classes_filename = f"{directory_run_artifacts}/node_class/{i_iter}.npy"
+        node_classes_pred_filename = f"{directory_run_artifacts}/node_class_pred/{i_iter}.npy"
+
+        # np.save(embedding_filename, embeddings)
+        np.save(node_probs_filename, node_probs)
+        np.save(node_classes_filename, node_classes)
+        np.save(node_classes_pred_filename, node_classes_pred)
 
     if score_file is not None:
         with open(score_file, "a") as f:
