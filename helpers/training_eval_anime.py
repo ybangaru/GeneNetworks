@@ -25,7 +25,7 @@ from .experiment_config import ANNOTATION_DICT
 def plotly_embeddings_anime_2d(experiment_id, run_id):
     df = read_run_embeddings_df(experiment_id, run_id)
 
-    num_iterations = int(df["Number"].max() / 10)
+    num_iterations = int(df["Number"].max() / 20)
     cell_types_list = list(ANNOTATION_DICT.values()) + ["Unknown_Z"]
     unique_colors = sorted(cell_types_list)
     color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
@@ -83,7 +83,7 @@ def plotly_embeddings_anime_2d(experiment_id, run_id):
 def plotly_embeddings_anime_3d(experiment_id, run_id):
     df = read_run_embeddings_df(experiment_id, run_id)
 
-    num_iterations = int(df["Number"].max() / 10)
+    num_iterations = int(df["Number"].max() / 20)
     cell_types_list = list(ANNOTATION_DICT.values()) + ["Unknown_Z"]
     unique_colors = sorted(cell_types_list)
     color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
@@ -146,8 +146,8 @@ def create_confusion_matrix(true_labels, pred_labels, labels):
     return cm_normalized
 
 
-def plotly_confusion_matrix_anime(experiment_id, run_id):
-    df = read_run_node_true_pred_labels(experiment_id, run_id)
+def plotly_confusion_matrix_anime(experiment_id, run_id, train_or_test="train"):
+    df = read_run_node_true_pred_labels(experiment_id, run_id, train_or_test=train_or_test)
     act_labels = [int(item) for item in ANNOTATION_DICT.keys()]
     df["normalized_confusion_matrix"] = df.apply(
         lambda row: create_confusion_matrix(row["true_labels"], row["pred_labels"], labels=act_labels),
@@ -255,9 +255,9 @@ def plotly_confusion_matrix_anime(experiment_id, run_id):
     return fig
 
 
-def plotly_precision_recall_curve_anime(experiment_id, run_id):
+def plotly_precision_recall_curve_anime(experiment_id, run_id, train_or_test="train"):
     class_names = [int(item) for item in list(ANNOTATION_DICT.keys())]
-    df = read_run_node_true_pred_labels(experiment_id, run_id, pred_as_dist=True)
+    df = read_run_node_true_pred_labels(experiment_id, run_id, pred_as_dist=True, train_or_test=train_or_test)
 
     # TODO: add attribute for filtering iterations in read_run_node_true_pred_labels
     df = df[df["Number"] % 20 == 0]

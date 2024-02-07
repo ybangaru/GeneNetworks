@@ -50,10 +50,13 @@ def read_run_result_ann_data(data_filter_name, x_resolution):
     return x_data
 
 
-def read_run_node_true_pred_labels(experiment_id, run_id, pred_as_dist=None):
-    true_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/node_class"
-    pred_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/node_probs"
-
+def read_run_node_true_pred_labels(experiment_id, run_id, pred_as_dist=None, train_or_test="train"):
+    if train_or_test == "train":
+        true_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/node_class"
+        pred_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/node_probs"
+    elif train_or_test == "test":
+        true_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/eval/node_class"
+        pred_labels_folder = f"{MLFLOW_TRACKING_URI}{experiment_id}/{run_id}/artifacts/eval/node_probs"
     true_labels_file_names = sorted(
         glob.glob(f"{true_labels_folder}/*.npy"),
         key=lambda x: int(re.search(r"\d+", x).group()),

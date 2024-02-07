@@ -303,9 +303,14 @@ class CellularGraphDataset(Dataset):
         """Read the full cellular graph (nx.Graph) of region `idx`"""
         return pickle.load(open(self.raw_paths[idx], "rb"))
 
-    def calculate_subgraph(self, idx, center_ind):
+    def calculate_subgraph(self, idx, center_ind, return_node_indices=False):
         """Generate the n-hop subgraph around cell `center_ind` from region `idx`"""
         data = self.get_full(idx)
+
+        if data["is_padding"][center_ind]:
+            logger.error("center node is part of padding area, invalid")
+            return
+
         if not self.subgraph_allow_distant_edge:
             edge_type_mask = data.edge_attr[:, 0] == EDGE_TYPES["neighbor"]
         else:
@@ -349,10 +354,15 @@ class CellularGraphDataset(Dataset):
         # Assign graph-level attributes
         for k in data:
             if not k[0] in sub_data:
-                sub_data[k[0]] = k[1]
+                if k[0] == "is_padding":
+                    sub_data[k[0]] = data["is_padding"][sub_node_inds]
+                else:
+                    sub_data[k[0]] = k[1]
 
         sub_data = tg.data.Data.from_dict(sub_data)
         self.cached_data[(idx, center_ind)] = sub_data
+        if return_node_indices:
+            return sub_data, sub_node_inds
         return sub_data
 
     def get_saved_subgraph_from_chunk(self, idx, center_ind):
@@ -378,7 +388,9 @@ class CellularGraphDataset(Dataset):
         cell_types = data["x"][data["is_padding"] == False][:, 0].long()  # noqa: E712
         freq = self.sampling_freq.gather(0, cell_types)
         freq = freq / freq.sum()
-        center_node_ind = np.random.choice(np.arange(len(freq)), p=freq.cpu().data.numpy())
+        center_node_ind = np.random.choice(
+            torch.where(data["is_padding"] == False)[0].numpy(), p=freq.cpu().data.numpy()
+        )
         return center_node_ind
 
     def load_to_cache(self, idx, subgraphs=True):
@@ -419,18 +431,25 @@ class CellularGraphDataset(Dataset):
         xcoord_ind = self.node_feature_names.index("center_coord-x")
         ycoord_ind = self.node_feature_names.index("center_coord-y")
 
-        _subg = self.calculate_subgraph(idx, center_ind)
+        _subg, sub_node_inds = self.calculate_subgraph(idx, center_ind, return_node_indices=True)
+        if torch.all(_subg["is_padding"]):
+            logger.error("all cells are from padding area in this graph segment")
+            return
+
         coords = _subg.x.data.numpy()[:, [xcoord_ind, ycoord_ind]].astype(float)
         x_c, y_c = coords[_subg.center_node_index]
 
         G = self.get_full_nx(idx)
-        sub_node_inds = []
-        for n in G.nodes:
-            c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
-            if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
-                sub_node_inds.append(n)
-        assert len(sub_node_inds) == len(coords)
-        _G = G.subgraph(sub_node_inds)
+        _G = G.subgraph(np.array(sub_node_inds))
+
+        # G = self.get_full_nx(idx)
+        # sub_node_inds = []
+        # for n in G.nodes:
+        #     c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
+        #     if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
+        #         sub_node_inds.append(n)
+        # assert len(sub_node_inds) == len(coords)
+        # _G = G.subgraph(sub_node_inds)
 
         node_colors = [self.cell_type_mapping[_G.nodes[n]["cell_type"]] for n in _G.nodes]
         node_colors = [matplotlib.cm.tab20(ct) for ct in node_colors]
