@@ -1,13 +1,13 @@
 #!/usr/bin/bash
 
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=2
-#SBATCH --cpus-per-task=3
-#SBATCH --mem-per-cpu=64G
-#SBATCH --time=2-0:00:00
-#SBATCH --job-name=qd452774-clustering
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+#SBATCH --mem-per-cpu=75G
+#SBATCH --time=14-0:00:00
+#SBATCH --job-name=bmhops1
 #SBATCH --output=logs/pipeline_clustering-%J.log
-#SBATCH --nodelist=compute-node004
+#SBATCH --nodelist=compute-node001
 
 echo "------------------------------------------------------------"
 echo "SLURM JOB ID: $SLURM_JOBID"
@@ -25,7 +25,8 @@ export PATH="$CONDA_ROOT/bin:$PATH"
 conda activate jupyterlab
 
 # Start the notebook
-export SLURM_CPUS_PER_TASK=6
+export SLURM_CPUS_PER_TASK=1
 # $CONDA_ROOT/envs/jupyterlab/bin/python pipeline_clustering_spatial.py
-$CONDA_ROOT/envs/jupyterlab/bin/python pipeline_build_nx_graphs.py
+# $CONDA_ROOT/envs/jupyterlab/bin/python pipeline_build_nx_graphs.py
+$CONDA_ROOT/envs/jupyterlab/bin/python pipeline_node_classification.py
 # To stop the notebook, use 'scancel'

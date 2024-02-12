@@ -2,13 +2,13 @@
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=3
+#SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=128G
-#SBATCH --time=2-0:00:00
+#SBATCH --time=7-0:00:00
 #SBATCH --account=qd452774
 #SBATCH --job-name=qd452774-python-code
 #SBATCH --output=logs/python-code-%J.log
-#SBATCH --nodelist=compute-node001
+#SBATCH --nodelist=compute-node002
 
 echo "------------------------------------------------------------"
 echo "SLURM JOB ID: $SLURM_JOBID"
@@ -51,4 +51,4 @@ echo "Change '8888' to some other value if this port is already in use on your P
 echo "for example, you have more than one remote app running."
 echo "To stop this app, run 'scancel $SLURM_JOB_ID'"
 
-srun --nodes=1 --ntasks-per-node=1 --cpus-per-task=3 --mem-per-cpu=128G --time=0-11:00 code-server --bind-addr 0.0.0.0:$CODE_PORT --auth password --disable-telemetry
+srun --nodes=1 --ntasks-per-node=1 --cpus-per-task=1 --mem-per-cpu=128G --time=7-0:00:00 code-server --bind-addr 0.0.0.0:$CODE_PORT --auth password --disable-telemetry

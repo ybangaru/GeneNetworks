@@ -2,12 +2,12 @@
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
-#SBATCH --mem-per-cpu=100G
-#SBATCH --time=0-2:00
-#SBATCH --job-name=ml-flow-dashboard
-#SBATCH --output=logs/mlflow-%J.log
-#SBATCH --nodelist=compute-node003
+#SBATCH --cpus-per-task=4
+#SBATCH --mem-per-cpu=32G
+#SBATCH --time=0-4:00
+#SBATCH --job-name=wandb-dashboard
+#SBATCH --output=logs/wandb-%J.log
+#SBATCH --nodelist=compute-node001
 
 echo "------------------------------------------------------------"
 echo "SLURM JOB ID: $SLURM_JOBID"
@@ -24,16 +24,16 @@ cd /data/qd452774/spatial_transcriptomics
 
 # setting random ports
 TUNNELPORT=`shuf -i 8501-9000 -n 1`
-MLFLOWPORT=$(shuf -i 9001-9500 -n 1)
+WANDBPORT=$(shuf -i 9001-9500 -n 1)
 
 # set a random access token
 # TOKEN=`cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 49 | head -n 1`
 
 # start reverse tunnel
-ssh -R$TUNNELPORT:localhost:$MLFLOWPORT $SLURM_SUBMIT_HOST -N -f
+ssh -R$TUNNELPORT:localhost:$WANDBPORT $SLURM_SUBMIT_HOST -N -f
 
 # Print instructions for local tunneling
-echo "mlflow dashboard port is $MLFLOWPORT"
+echo "WANDB dashboard port is $WANDBPORT"
 echo "On your local machine, run:"
 echo ""
 echo "ssh -L8888:localhost:$TUNNELPORT $USER@$SLURM_SUBMIT_HOST -N -4"
@@ -46,4 +46,4 @@ echo "To stop this app, run 'scancel $SLURM_JOB_ID'"
 
 # Start the server
 # export MLFLOW_SERVER_MEMORY=128G
-srun -n1 mlflow ui --port=$MLFLOWPORT
+srun -n1 wandb server start --upgrade --port=$WANDBPORT

@@ -2,12 +2,12 @@
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=90G
 #SBATCH --time=10-00:00:00
-#SBATCH --job-name=10hop
+#SBATCH --job-name=eval-plots
 #SBATCH --output=logs/random-%J.log
-#SBATCH --nodelist=compute-node003
+#SBATCH --nodelist=compute-node004
 
 echo "------------------------------------------------------------"
 echo "SLURM JOB ID: $SLURM_JOBID"
@@ -23,10 +23,11 @@ export PATH="$CONDA_ROOT/bin:$PATH"
 # Now you can activate your configured conda environments
 # source .venv/bin/activate
 conda activate jupyterlab
+cd /data/qd452774/spatial_transcriptomics
 
-export SLURM_CPUS_PER_TASK=2
+export SLURM_CPUS_PER_TASK=1
 # $CONDA_ROOT/envs/jupyterlab/bin/python cluster_comparison.py
-$CONDA_ROOT/envs/jupyterlab/bin/python pipeline_node_classification.py
+$CONDA_ROOT/envs/jupyterlab/bin/python test_spotlight.py
 
 # Start the notebook
 # srun -n1 jupyter nbconvert --to python --execute pipeline_visualizations_spatial.ipynb
