@@ -103,6 +103,7 @@ def train_subgraph(
             "batch_size": batch_size,
             "lr": lr,
             "graph_loss_weight": graph_loss_weight,
+            "log_edge_embeddings": log_edge_embeddings,
         }
 
         # Log the parameters
