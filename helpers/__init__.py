@@ -42,9 +42,11 @@ from .experiment_config import (
     EDGE_TYPES,
 )
 from .training_eval_anime import (
-    build_embeddings_anime_2d,
-    build_embeddings_anime_3d,
-    build_confusion_matrix_anime,
+    plotly_embeddings_anime_2d,
+    plotly_embeddings_anime_3d,
+    plotly_confusion_matrix_anime,
+    plotly_precision_recall_curve_anime,
+    plotly_classification_report_anime,
 )
 from .graph_build import (
     plot_graph,

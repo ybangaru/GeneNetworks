@@ -30,13 +30,11 @@ def get_cell_type_metadata(nx_graph_files):
     cell_annotation_frequencies_path = os.path.join(directory_path, "cell_annotation_freq.json")
 
     try:
-        cell_type_mapping = json.load(open(cell_type_mapping_path))
-        cell_type_freq = json.load(open(cell_type_freq_path))
+        sequential_mapping = json.load(open(cell_type_mapping_path))
         sorted_cell_annotation_freq = json.load(open(cell_annotation_frequencies_path))
 
     except FileNotFoundError:
         cell_type_mapping = {}
-        cell_annotation_frequencies = {}
         for g_f in nx_graph_files:
             G = pickle.load(open(g_f, "rb"))
 
@@ -47,37 +45,24 @@ def get_cell_type_metadata(nx_graph_files):
                     cell_type_mapping[ct] = 0
                 cell_type_mapping[ct] += 1
 
-                ann_ct = ANNOTATION_DICT[ct]
-                cur_ann_ct_count = cell_annotation_frequencies.get(ann_ct, 0)
-                cell_annotation_frequencies[ann_ct] = cur_ann_ct_count + 1
+        unique_cell_types_sum = sum(list(cell_type_mapping.values()))
+        unique_cell_type_freq = {item: cell_type_mapping[item] / unique_cell_types_sum for item in cell_type_mapping}
 
-        # TODO: Handle when keys are not int type
-        unique_cell_types = sorted(cell_type_mapping.keys(), key=lambda x: int(x))
-        unique_cell_types_ct = [cell_type_mapping[ct] for ct in unique_cell_types]
-        unique_cell_type_freq = [count / sum(unique_cell_types_ct) for count in unique_cell_types_ct]
-        cell_type_mapping = {ct: i for i, ct in enumerate(unique_cell_types)}
-        cell_type_freq = dict(zip(unique_cell_types, unique_cell_type_freq))
-
-        cell_annotation_frequencies = {
-            item: cell_annotation_frequencies[item] / sum(cell_annotation_frequencies.values())
-            for item in cell_annotation_frequencies
-        }
+        sequential_mapping = {key: index for index, key in enumerate(cell_type_mapping.keys())}
         sorted_cell_annotation_freq = dict(
             sorted(
-                cell_annotation_frequencies.items(),
+                unique_cell_type_freq.items(),
                 key=lambda item: item[1],
                 reverse=True,
             )
         )
 
         with open(cell_type_mapping_path, "w") as json_file:
-            json.dump(cell_type_mapping, json_file, indent=2)
+            json.dump(sequential_mapping, json_file, indent=2)
         with open(cell_type_freq_path, "w") as json_file:
-            json.dump(cell_type_freq, json_file, indent=2)
-        with open(cell_annotation_frequencies_path, "w") as json_file:
             json.dump(sorted_cell_annotation_freq, json_file, indent=2)
 
-    return cell_type_mapping, cell_type_freq, sorted_cell_annotation_freq
+    return sequential_mapping, sorted_cell_annotation_freq
 
 
 def get_biomarker_metadata(nx_graph_files, file_loc=None):

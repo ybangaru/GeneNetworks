@@ -47,13 +47,13 @@ def predict_on_batch(batch, model, device, dataset):
         "node_y": node_y.cpu().numpy(),
         "node_pred": node_pred.cpu().numpy(),
     }
-    # confusion_matrix_fig = plotly_confusion_matrix(node_y.cpu().numpy(), node_pred.cpu().numpy(), labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_annotation_mapping.keys()))
+    # confusion_matrix_fig = plotly_confusion_matrix(node_y.cpu().numpy(), node_pred.cpu().numpy(), labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_type_mapping.keys()))
     node_probs = torch.nn.functional.softmax(res[0], dim=1).detach().cpu().numpy()
     precision_recall_info = {
         "node_y": node_y.cpu().numpy(),
         "node_probs": node_probs,
     }
-    # precision_recall_fig = plotly_precision_recall_curve(node_y.cpu().numpy(), node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
+    # precision_recall_fig = plotly_precision_recall_curve(node_y.cpu().numpy(), node_probs, class_names=list(dataset.cell_type_mapping.keys()))
     node_embeddings = res[-1].detach().cpu().numpy()
     return (
         node_preds,
@@ -104,11 +104,11 @@ def save_pred(
 
     # node_y_val = np.concatenate([item["node_y"] for item in confusion_matrix_results])
     # node_pred_val = np.concatenate([item["node_pred"] for item in confusion_matrix_results])
-    # confusion_matrix_fig = plotly_confusion_matrix(node_y_val, node_pred_val, labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_annotation_mapping.keys()))
+    # confusion_matrix_fig = plotly_confusion_matrix(node_y_val, node_pred_val, labels=list(dataset.cell_type_mapping.values()), class_names=list(dataset.cell_type_mapping.keys()))
     # confusion_matrix_fig.write_html(f"results/confusion_matrix_{len(node_y_val)}.html")
 
     # node_probs = np.concatenate([item["node_probs"] for item in precision_recall_results])
-    # precision_recall_fig = plotly_precision_recall_curve(node_y_val, node_probs, class_names=list(dataset.cell_annotation_mapping.keys()))
+    # precision_recall_fig = plotly_precision_recall_curve(node_y_val, node_probs, class_names=list(dataset.cell_type_mapping.keys()))
     # precision_recall_fig.write_html(f"results/precision_recall_{len(node_y_val)}.html")
 
     return
@@ -307,6 +307,7 @@ def collect_predict_by_random_sample(
 
     node_preds = []
     node_labels = []
+    node_probs = []
     graph_preds = []
     graph_ys = []
     graph_ws = []
@@ -320,6 +321,8 @@ def collect_predict_by_random_sample(
             node_pred = res[0]
             node_labels.append(node_y.detach().cpu().data.numpy())
             node_preds.append(node_pred.detach().cpu().data.numpy())
+            temp_probs = torch.nn.functional.softmax(res[0], dim=1).detach().cpu().numpy()
+            node_probs.append(temp_probs)
 
         if model.num_graph_tasks > 0:
             graph_y, graph_w = batch.graph_y.float(), batch.graph_w.float()
@@ -330,14 +333,22 @@ def collect_predict_by_random_sample(
 
     dataset.set_subgraph_source(original_subgraph_source)
     dataset.set_indices(np.arange(dataset.N))
-    if model.num_node_tasks > 0:
-        node_preds = np.concatenate(node_preds, 0)
-        node_labels = np.concatenate(node_labels, 0)
-    if model.num_graph_tasks > 0:
-        graph_preds = np.concatenate(graph_preds, 0)
-        graph_ys = np.concatenate(graph_ys, 0)
-        graph_ws = np.concatenate(graph_ws, 0)
-    return node_preds, node_labels, graph_preds, graph_ys, graph_ws
+    # TODO: Handle graph tasks separately
+    # if model.num_node_tasks > 0:
+    #     node_preds = np.concatenate(node_preds, 0)
+    #     node_labels = np.concatenate(node_labels, 0)
+    # if model.num_graph_tasks > 0:
+    #     graph_preds = np.concatenate(graph_preds, 0)
+    #     graph_ys = np.concatenate(graph_ys, 0)
+    #     graph_ws = np.concatenate(graph_ws, 0)
+    return (
+        np.concatenate(node_preds),
+        np.concatenate(node_labels),
+        np.concatenate(node_probs),
+        graph_preds,
+        graph_ys,
+        graph_ws,
+    )
 
 
 # Evaluate fns (for random subgraph samples)
