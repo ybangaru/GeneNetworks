@@ -7,12 +7,8 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from sklearn.metrics import precision_recall_curve, auc, confusion_matrix, roc_curve, classification_report
+from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_curve, classification_report
 from sklearn.preprocessing import label_binarize
-
-
-# TODO: Build sklearn.metrics classification report animation as well
-
 from .mlflow_client_ import (
     MLFLOW_CLIENT,
     read_run_embeddings_df,
@@ -20,6 +16,30 @@ from .mlflow_client_ import (
 )
 from .plotly_helpers import COLORS_LIST
 from .experiment_config import ANNOTATION_DICT
+
+
+def plotly_classification_report_anime(exp_id, run_id, dataset_type):
+    df = read_run_node_true_pred_labels(experiment_id=exp_id, run_id=run_id, train_or_test=dataset_type)
+    df["report"] = df.apply(
+        lambda row: classification_report(row["true_labels"], row["pred_labels"], output_dict=True), axis=1
+    )
+    df["report"] = df.apply(lambda row: pd.DataFrame(row["report"]).reset_index().melt(id_vars=["index"]), axis=1)
+    df = df[["Number", "report"]]
+
+    plot_data = []
+    for row in df.itertuples():
+        temp_df = row.report
+        temp_df["Number"] = row.Number
+        plot_data.append(temp_df)
+
+    plot_data = pd.concat(plot_data)
+    plot_data = plot_data.rename(
+        columns={"index": "metric", "value": "score", "Number": "Epoch", "variable": "cell_type"}
+    )
+    plot_data["cell_type"] = plot_data["cell_type"].replace(ANNOTATION_DICT)
+
+    # TODO: add attributes for which score, which plot type, also auc plots from sklearn.metrics
+    print(plot_data)
 
 
 def plotly_embeddings_anime_2d(experiment_id, run_id):

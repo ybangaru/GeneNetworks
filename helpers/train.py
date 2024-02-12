@@ -34,6 +34,7 @@ def train_subgraph(
     graph_loss_weight=1.0,
     dataset_kwargs={},
     embedding_log_freq=100_000,
+    log_edge_embeddings=False,
     **kwargs,
 ):
     """Train a GNN model through sampling subgraphs
@@ -175,6 +176,13 @@ def train_subgraph(
                 np.save(node_probs_filename, node_probs)
                 np.save(node_classes_filename, node_classes)
                 np.save(node_classes_pred_filename, node_classes_pred)
+
+                # edge embeddings
+                if log_edge_embeddings:
+                    for ind, layer_item in enumerate(model.gnn.gnns):
+                        edge_embeddings_filename = f"{directory_run_artifacts}/embeddings/gin_edge{ind+1}_{i_iter}.npy"
+                        edge_embeddings = layer_item.edge_embedding.weight.detach().cpu().numpy()
+                        np.save(edge_embeddings_filename, edge_embeddings)
 
             if i_iter > 0 and i_iter % evaluate_freq == 0:
                 summary_str = "Finished iterations %d" % i_iter
