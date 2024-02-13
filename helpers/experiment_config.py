@@ -3,7 +3,7 @@ This file contains the configuration used for graph node classification experime
 The configuration is obtained after leiden clustering of scRNA-seq data and annotation of the clusters
 """
 import json
-from .local_config import PROJECT_DIR
+from .local_config import DATA_DIR
 
 # BASE_MICRONS = "20um"
 # BASE_MICRONS = "10um"
@@ -13,9 +13,7 @@ BASE_MICRONS = "5um"
 
 # Define the directory where your JSON files are located
 liver_slices = ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"]
-base_dir = f"{PROJECT_DIR}/data"
-
-file_names = [f"{base_dir}/{slice_item}/images/manifest.json" for slice_item in liver_slices]
+file_names = [f"{DATA_DIR}/{slice_item}/images/manifest.json" for slice_item in liver_slices]
 
 SLICE_PIXELS_EDGE_CUTOFF = {}
 

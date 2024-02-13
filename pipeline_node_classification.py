@@ -6,7 +6,7 @@ import torch.nn as nn
 from sklearn.model_selection import train_test_split
 
 import helpers
-from helpers import CellularGraphDataset, NO_JOBS, PROJECT_DIR, train_subgraph, logger
+from helpers import CellularGraphDataset, NO_JOBS, DATA_DIR, train_subgraph, logger
 
 warnings.filterwarnings("ignore")
 
@@ -30,10 +30,16 @@ def train_node_classification(dataset_kwargs):
         use_node_features = [
             x for x in dataset_kwargs["node_features"] if x not in dataset_kwargs["node_features_mask"]
         ]
+        if dataset_kwargs["center_node_features_mask"]:
+            use_center_node_features = [
+                x for x in use_node_features if x not in dataset_kwargs["center_node_features_mask"]
+            ]
         transformers.append(
             helpers.FeatureMask(
                 dataset,
-                use_center_node_features=use_node_features,
+                use_center_node_features=use_center_node_features
+                if dataset_kwargs["center_node_features_mask"]
+                else use_node_features,
                 use_neighbor_node_features=use_node_features,
                 use_edge_features=dataset.edge_feature_names,
             )
@@ -126,11 +132,10 @@ def train_node_classification(dataset_kwargs):
 def build_train_kwargs(network_type, graph_type, kwargs):
     # TODO: subgraphs not using SUBGRAPH_RADIUS_LIMIT while plotting
 
-    pro_dir = kwargs["dir_loc"]
     data_filter_name = kwargs["mlflow_config"]["data_filter_name"]
     resolution = kwargs["mlflow_config"]["leiden_resolution"]
 
-    dataset_root = f"{pro_dir}/data/{data_filter_name}_leiden_res_{resolution}"
+    dataset_root = f"{DATA_DIR}/{data_filter_name}_leiden_res_{resolution}"
 
     SUBGRAPH_SIZE = 3
     SUBGRAPH_RADIUS_LIMIT = 184  # SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"] * SUBGRAPH_SIZE
@@ -163,6 +168,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         "voronoi_polygon" if "voronoi" in network_type else "boundary_polygon",
     ]
     NODE_FEATURES_MASK = ["center_coord"]
+    CENTER_NODE_FEATURES_MASK = ["center_coord", "biomarker_expression"]
     EDGE_FEATURES = ["edge_type", "distance"]  # edge_type must be first variable (cell pair) features "edge_type",
     EDGE_FEATURES_MASK = None
 
@@ -179,6 +185,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         "network_type": network_type,
         "node_features": NODE_FEATURES,
         "node_features_mask": NODE_FEATURES_MASK,
+        "center_node_features_mask": CENTER_NODE_FEATURES_MASK,
         "edge_features": EDGE_FEATURES,
         "edge_features_mask": EDGE_FEATURES_MASK,
         "graph_type": graph_type,
@@ -208,7 +215,6 @@ def main():
     leiden_resolution = 0.7
 
     data_options = {
-        "dir_loc": PROJECT_DIR,
         "names_list": all_liver_samples,
         "mlflow_config": {
             "id": None,
