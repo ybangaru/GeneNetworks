@@ -2,6 +2,7 @@
 This file contains the classes for handling the experiments clustering, classification and
 the visualization of the results during and after the experiments.
 """
+import json
 import os
 import pickle
 import networkx as nx
@@ -16,14 +17,13 @@ from rtree import index
 import plotly.io as pio
 
 from .data import BoundaryDataLoader
-from .local_config import PROJECT_DIR
 from .graph_build import (
     calcualte_voronoi_from_coords,
     build_graph_from_cell_coords,
     assign_attributes,
     get_edge_type,
 )
-from .mlflow_client_ import read_run_result_ann_data
+from .mlflow_client_ import read_run_result_ann_data, read_run_attribute_clustering
 from .plotly_helpers import (
     plotly_spatial_scatter_categorical,
     plotly_spatial_scatter_edges,
@@ -32,6 +32,7 @@ from .plotly_helpers import (
     plotly_umap_categorical,
     plotly_umap_numerical,
 )
+from .logging_setup import logger
 
 sc.settings.verbosity = 3
 sc.settings.set_figure_params(dpi=120, facecolor="white")
@@ -39,21 +40,27 @@ sc.settings.set_figure_params(dpi=120, facecolor="white")
 
 class spatialPipeline:
     def __init__(self, options):
-        # super().__init__()
-        self.dir_location = options["dir_loc"]
-        self.names_list = options["names_list"]
+        self.data_dir = options.get("data_dir")
+        self.slides_list = options.get("names_list")
+        self.cell_type_column = options.get("cell_type_column")
+        self.base_microns_for_edge_cutoff = options.get("base_microns_for_edge_cutoff")
+
+        if not self.slides_list and options.get("mlflow_config"):
+            logger.info("No slides list provided, reading slides list from mlflow config")
+            self.slides_list = read_run_attribute_clustering(**options["mlflow_config"], attribute_name="names_list")
         if options.get("mlflow_config"):
-            y_data_filter_name = options["mlflow_config"]["data_filter_name"]
-            y_resolution = options["mlflow_config"]["leiden_resolution"]
-            self.data = read_run_result_ann_data(y_data_filter_name, y_resolution)
+            self.data = read_run_result_ann_data(**options["mlflow_config"])
         else:
             self.data = []
             self.read_data()
         self.segment_instances = {}
 
     def read_data(self):
-        for name in self.names_list:
-            vizgen_dir_ab = f"{self.dir_location}/data/{name}"
+        assert (
+            self.data_dir and self.slides_list
+        ), "Please provide the data_dir and samples list to build annData from the raw data"
+        for name in self.slides_list:
+            vizgen_dir_ab = f"{self.data_dir}/{name}"
             adata_ab = sq.read.vizgen(
                 path=vizgen_dir_ab,
                 counts_file="cell_by_gene.csv",
@@ -95,6 +102,7 @@ class spatialPipeline:
         n_segments = segment_config.get("segments_per_dimension", 20)
         z_index = segment_config.get("z_index", 0)
         padding_info = segment_config.get("padding", None)
+        dir_location = f"{self.data_dir}/{slide_name}"
 
         boundary_instance = BoundaryDataLoader(
             slide_name,
@@ -103,6 +111,7 @@ class spatialPipeline:
             n_segments=n_segments,
             z_index=z_index,
             padding=padding_info,
+            dir_location=dir_location,
         )
         boundary_arrays = boundary_instance.read_boundaries(self.data)
         self.segment_instances[(slide_name, x_range_index, y_range_index, n_segments)] = boundary_instance
@@ -145,6 +154,44 @@ class spatialPipeline:
         cell_data[bm_columns] = pd.DataFrame(self.data[cell_data["CELL_ID"], :].X.toarray())
 
         return cell_data, filtered_spatial_data
+
+    def build_network_edge_cutoffs(self, base_microns=5):
+        """
+        This function builds the edge cutoffs for the networkx graph from the base microns
+        Args:
+            base_microns (int): the base microns for the edge cutoffs, units in microns
+        """
+        # BASE_MICRONS = "20um"
+        # BASE_MICRONS = "10um"
+        # BASE_MICRONS = "5um"
+        # BASE_MICRONS = "1um"
+
+        # Define the directory where your JSON files are located
+        # liver_slices = ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"]
+        file_names = [f"{self.data_dir}/{slice_item}/images/manifest.json" for slice_item in self.slides_list]
+
+        SLICE_PIXELS_EDGE_CUTOFF = {}
+
+        for file_name_index in range(len(file_names)):
+            # Load the JSON data from the file
+            with open(file_names[file_name_index], "r") as json_file:
+                data = json.load(json_file)
+
+            # Extract the microns_per_pixel value
+            microns_per_pixel = data["microns_per_pixel"]
+
+            # Calculate the transformed pixels for your NEIGHBOR_EDGE_CUTOFF value
+            # if BASE_MICRONS == "20um":
+            SLICE_PIXELS_EDGE_CUTOFF[self.slides_list[file_name_index]] = base_microns / microns_per_pixel
+            # elif BASE_MICRONS == "10um":
+            #     SLICE_PIXELS_EDGE_CUTOFF[liver_slices[file_name_index]] = 10 / microns_per_pixel
+            # elif BASE_MICRONS == "5um":
+            #     SLICE_PIXELS_EDGE_CUTOFF[liver_slices[file_name_index]] = 5 / microns_per_pixel
+            # elif BASE_MICRONS == "1um":
+            #     SLICE_PIXELS_EDGE_CUTOFF[liver_slices[file_name_index]] = 1 / microns_per_pixel
+
+        SLICE_PIXELS_EDGE_CUTOFF = {key: int(value) for key, value in SLICE_PIXELS_EDGE_CUTOFF.items()}
+        self.slice_pixels_edge_cutoff = SLICE_PIXELS_EDGE_CUTOFF
 
     def build_networkx_for_region(self, segment_config, pretransform_networkx_config, network_features_config):
         segment_boundaries_given = self.read_boundary_arrays(segment_config)
@@ -193,7 +240,7 @@ class spatialPipeline:
             segment_data,
             segment_boundaries_given,
             node_to_cell_mapping,
-            pretransform_networkx_config["neighbor_edge_cutoff"],
+            segment_config["neighbor_edge_cutoff"],
             padding_dict,
         )
 
@@ -285,7 +332,9 @@ class spatialPipeline:
         )
 
         if save_:
-            dataset_root = f"{PROJECT_DIR}/data/Liver12Slice12_leiden_res_0.7"
+            # TODO: save to mlflow run directly, add an attribute for the same
+            dataset_root = f"{self.data_dir}/{'.'.join(self.slides_list)}_{self.cell_type_column}_base_microns_for_edge_cutoff_{self.base_microns_for_edge_cutoff}um"
+            dataset_root = str.lower(dataset_root)
             boundary_name = str.lower(pretransform_networkx_config["boundary_type"])
             edge_name = str.lower(pretransform_networkx_config["edge_config"]["type"])
             no_segments_ = segment_config["segments_per_dimension"]

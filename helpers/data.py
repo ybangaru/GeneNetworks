@@ -8,7 +8,8 @@ import os
 import json
 import pickle
 import numpy as np
-import pandas as pd
+
+# import pandas as pd
 import multiprocessing
 import matplotlib
 import matplotlib.pyplot as plt
@@ -23,11 +24,11 @@ from torch_geometric.utils import subgraph
 from joblib.externals.loky.backend.context import get_context
 
 
-from .experiment_config import EDGE_TYPES, ANNOTATION_DICT
 from .features import get_feature_names, nx_to_tg_graph
 from .graph_build import plot_graph
 from .logging_setup import logger
-from .plotly_helpers import plotly_spatial_scatter_subgraph
+
+# from .plotly_helpers import plotly_spatial_scatter_subgraph
 from .utils import (
     get_cell_type_metadata,
     get_biomarker_metadata,
@@ -53,6 +54,7 @@ class CellularGraphDataset(Dataset):
             "center_coord",
         ],
         edge_features=["edge_type", "distance"],
+        edge_types=None,
         cell_type_mapping=None,
         cell_type_freq=None,
         biomarkers=None,
@@ -101,10 +103,7 @@ class CellularGraphDataset(Dataset):
         # Find all unique cell types in the dataset
         if cell_type_mapping is None or cell_type_freq is None:
             nx_graph_files = [os.path.join(self.raw_dir, f) for f in self.raw_file_names]
-            (
-                self.cell_type_mapping,
-                self.cell_type_freq,
-            ) = get_cell_type_metadata(nx_graph_files)
+            (self.cell_type_mapping, self.cell_type_freq, self.annotation_dict) = get_cell_type_metadata(nx_graph_files)
         else:
             self.cell_type_mapping = cell_type_mapping
             self.cell_type_freq = cell_type_freq
@@ -119,6 +118,7 @@ class CellularGraphDataset(Dataset):
         # Node features & edge features
         self.node_features = node_features
         self.edge_features = edge_features
+        self.edge_types = edge_types
         if "cell_type" in self.node_features:
             assert self.node_features.index("cell_type") == 0, "cell_type must be the first node feature"
         if "edge_type" in self.edge_features:
@@ -140,6 +140,7 @@ class CellularGraphDataset(Dataset):
         self.feature_kwargs["cell_type_mapping"] = self.cell_type_mapping
         self.feature_kwargs["biomarkers"] = self.biomarkers
         self.feature_kwargs["cell_type_freq"] = self.cell_type_freq
+        self.feature_kwargs["edge_types"] = self.edge_types
 
         # Note this command below calls the `process` function
         super(CellularGraphDataset, self).__init__(root, None, pre_transform)
@@ -312,7 +313,7 @@ class CellularGraphDataset(Dataset):
             return
 
         if not self.subgraph_allow_distant_edge:
-            edge_type_mask = data.edge_attr[:, 0] == EDGE_TYPES["neighbor"]
+            edge_type_mask = data.edge_attr[:, 0] == self.edge_types["neighbor"]
         else:
             edge_type_mask = None
         sub_node_inds = k_hop_subgraph(
@@ -389,7 +390,7 @@ class CellularGraphDataset(Dataset):
         freq = self.sampling_freq.gather(0, cell_types)
         freq = freq / freq.sum()
         center_node_ind = np.random.choice(
-            torch.where(data["is_padding"] == False)[0].numpy(), p=freq.cpu().data.numpy()
+            torch.where(data["is_padding"] == False)[0].numpy(), p=freq.cpu().data.numpy()  # noqa: E712
         )
         return center_node_ind
 
@@ -470,32 +471,32 @@ class CellularGraphDataset(Dataset):
 
         return buffer
 
-    def build_subgraph_plotly(self, idx, center_ind):
-        data = self.get_full(idx)
-        # if not self.subgraph_allow_distant_edge:
-        #     edge_type_mask = (data.edge_attr[:, 0] == EDGE_TYPES["neighbor"])
-        # else:
-        edge_type_mask = None
-        sub_node_inds = k_hop_subgraph(
-            int(center_ind),
-            self.subgraph_size,
-            data.edge_index,
-            edge_type_mask=edge_type_mask,
-            relabel_nodes=False,
-            num_nodes=data.x.shape[0],
-        )[0]
+    # def build_subgraph_plotly(self, idx, center_ind):
+    #     data = self.get_full(idx)
+    #     # if not self.subgraph_allow_distant_edge:
+    #     #     edge_type_mask = (data.edge_attr[:, 0] == EDGE_TYPES["neighbor"])
+    #     # else:
+    #     edge_type_mask = None
+    #     sub_node_inds = k_hop_subgraph(
+    #         int(center_ind),
+    #         self.subgraph_size,
+    #         data.edge_index,
+    #         edge_type_mask=edge_type_mask,
+    #         relabel_nodes=False,
+    #         num_nodes=data.x.shape[0],
+    #     )[0]
 
-        G = self.get_full_nx(idx)
-        _G = G.subgraph(np.array(sub_node_inds))
+    #     G = self.get_full_nx(idx)
+    #     _G = G.subgraph(np.array(sub_node_inds))
 
-        node_colors = {f"{_G.nodes[n]['cell_id']}": self.cell_[_G.nodes[n]["cell_type"]] for n in _G.nodes}
-        test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
-        # color_column = pd.Series(node_colors, index=_G.nodes)
-        color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
-        color_column = color_column["leiden_res"]
-        color_column = color_column.astype(str).map(ANNOTATION_DICT)
+    #     node_colors = {f"{_G.nodes[n]['cell_id']}": self.cell_[_G.nodes[n]["cell_type"]] for n in _G.nodes}
+    #     test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
+    #     # color_column = pd.Series(node_colors, index=_G.nodes)
+    #     color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
+    #     color_column = color_column["leiden_res"]
+    #     color_column = color_column.astype(str).map(ANNOTATION_DICT)
 
-        return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
+    #     return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
 
     def plot_graph_legend(self):
         """Legend for cell type colors"""
@@ -703,9 +704,10 @@ class BoundaryDataLoader:
         n_segments=20,
         z_index=0,
         padding=None,
+        dir_location=None,
     ) -> None:
         self.slide_name = slide_name
-        self.dir_location = f"{os.path.realpath(os.path.join(os.getcwd()))}/data/{self.slide_name}"
+        self.dir_location = dir_location
 
         self.x_range_index = x_range_index
         self.y_range_index = y_range_index

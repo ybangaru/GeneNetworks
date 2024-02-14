@@ -833,32 +833,32 @@ def plotly_node_embeddings_3d(embeddings, labels, class_names, title="Node Embed
     return fig
 
 
-def build_subgraph_for_plotly(dataset, idx, center_ind):
-    # def plot_subgraph(self, idx, center_ind):
-    #     """Plot the n-hop subgraph around cell `center_ind` from region `idx`"""
-    xcoord_ind = dataset.node_feature_names.index("center_coord-x")
-    ycoord_ind = dataset.node_feature_names.index("center_coord-y")
+# def build_subgraph_for_plotly(dataset, idx, center_ind):
+#     # def plot_subgraph(self, idx, center_ind):
+#     #     """Plot the n-hop subgraph around cell `center_ind` from region `idx`"""
+#     xcoord_ind = dataset.node_feature_names.index("center_coord-x")
+#     ycoord_ind = dataset.node_feature_names.index("center_coord-y")
 
-    _subg = dataset.calculate_subgraph(idx, center_ind)
-    coords = _subg.x.data.numpy()[:, [xcoord_ind, ycoord_ind]].astype(float)
-    x_c, y_c = coords[_subg.center_node_index]
+#     _subg = dataset.calculate_subgraph(idx, center_ind, edge_types=None)
+#     coords = _subg.x.data.numpy()[:, [xcoord_ind, ycoord_ind]].astype(float)
+#     x_c, y_c = coords[_subg.center_node_index]
 
-    G = dataset.get_full_nx(idx)
-    sub_node_inds = []
-    for n in G.nodes:
-        c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
-        if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
-            sub_node_inds.append(n)
-    assert len(sub_node_inds) == len(coords)
-    _G = G.subgraph(sub_node_inds)
+#     G = dataset.get_full_nx(idx)
+#     sub_node_inds = []
+#     for n in G.nodes:
+#         c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
+#         if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
+#             sub_node_inds.append(n)
+#     assert len(sub_node_inds) == len(coords)
+#     _G = G.subgraph(sub_node_inds)
 
-    node_colors = {f"{_G.nodes[n]['cell_id']}": dataset.cell_type_mapping[_G.nodes[n]["cell_type"]] for n in _G.nodes}
-    test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
-    # color_column = pd.Series(node_colors, index=_G.nodes)
-    color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
-    color_column = color_column["leiden_res"]
+#     node_colors = {f"{_G.nodes[n]['cell_id']}": dataset.cell_type_mapping[_G.nodes[n]["cell_type"]] for n in _G.nodes}
+#     test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
+#     # color_column = pd.Series(node_colors, index=_G.nodes)
+#     color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
+#     color_column = color_column["leiden_res"]
 
-    return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
+#     return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
 
 
 if __name__ == "__main__":

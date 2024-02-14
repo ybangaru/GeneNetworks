@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import mlflow
 import scanpy as sc
+from ast import literal_eval
 from .logging_setup import logger
 from .local_config import MLFLOW_TRACKING_URI
 
@@ -38,14 +39,63 @@ def get_run_info(x_experiment, x_resolution):
         return None
 
 
-def read_run_result_ann_data(data_filter_name, x_resolution):
-    xrun_info = get_run_info(data_filter_name, x_resolution)
+def read_run_annotations(run_id=None, slides_name=None, resolution=None):
+    if (run_id and slides_name) or (run_id and resolution):
+        logger.info("Provided run_id and slides_name or resolution, using run_id directly")
+
+    if run_id:
+        xrun_info = MLFLOW_CLIENT.get_run(run_id)
+    else:
+        assert (
+            slides_name and resolution
+        ), "Please provide slides custom name and resolution to filter runs for the experiment"
+        xrun_info = get_run_info(slides_name, resolution)
+
     exp_id = xrun_info.info.experiment_id
     run_id = xrun_info.info.run_id
-    x_anndata_path = (
-        f"{MLFLOW_TRACKING_URI}{exp_id}/{run_id}/artifacts/data/spatial_clustering_ss_{data_filter_name}.h5ad"
-    )
-    x_data = sc.read_h5ad(x_anndata_path)
+    annotations_json_file = f"{MLFLOW_TRACKING_URI}{exp_id}/{run_id}/artifacts/metadata/annotations_dict.json"
+    with open(annotations_json_file, "r") as json_file:
+        annotations_dict = literal_eval(json_file.read())
+
+    return annotations_dict
+
+
+def read_run_attribute_clustering(run_id=None, slides_name=None, resolution=None, attribute_name=None):
+    if (run_id and slides_name) or (run_id and resolution):
+        logger.info("Provided run_id and slides_name or resolution, using run_id directly")
+
+    if run_id:
+        xrun_info = MLFLOW_CLIENT.get_run(run_id)
+    else:
+        assert (
+            slides_name and resolution
+        ), "Please provide slides custom name and resolution to filter runs for the experiment"
+        xrun_info = get_run_info(slides_name, resolution)
+
+    return literal_eval(xrun_info.data.params[attribute_name])
+
+
+def read_run_result_ann_data(run_id=None, slides_name=None, resolution=None):
+    if (run_id and slides_name) or (run_id and resolution):
+        logger.info("Provided run_id and slides_name or resolution, using run_id directly")
+
+    if run_id:
+        xrun_info = MLFLOW_CLIENT.get_run(run_id)
+    else:
+        assert (
+            slides_name and resolution
+        ), "Please provide slides custom name and resolution to filter runs for the experiment"
+        xrun_info = get_run_info(slides_name, resolution)
+
+    exp_id = xrun_info.info.experiment_id
+    run_id = xrun_info.info.run_id
+
+    # read filename automatically ending with h5ad
+    file_names = glob.glob(f"{MLFLOW_TRACKING_URI}{exp_id}/{run_id}/artifacts/data/*.h5ad")
+    if len(file_names) > 1:
+        logger.error("more than one h5ad files found")
+        raise ValueError("more than one h5ad files found")
+    x_data = sc.read_h5ad(filename=file_names[0])
 
     return x_data
 

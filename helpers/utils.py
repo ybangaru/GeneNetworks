@@ -8,7 +8,6 @@ import json
 import os
 import numpy as np
 import pickle
-from .experiment_config import ANNOTATION_DICT
 
 
 def get_cell_type_metadata(nx_graph_files):
@@ -26,11 +25,13 @@ def get_cell_type_metadata(nx_graph_files):
 
     directory_path = os.path.dirname(os.path.dirname(nx_graph_files[0]))
     cell_type_mapping_path = os.path.join(directory_path, "cell_type_mapping.json")
+    cell_annotations_dict_path = os.path.join(directory_path, "cell_annotations_dict.json")
     cell_type_freq_path = os.path.join(directory_path, "cell_type_freq.json")
     cell_annotation_frequencies_path = os.path.join(directory_path, "cell_annotation_freq.json")
 
     try:
         sequential_mapping = json.load(open(cell_type_mapping_path))
+        cell_annotations_dict = json.load(open(cell_type_mapping_path))
         sorted_cell_annotation_freq = json.load(open(cell_annotation_frequencies_path))
 
     except FileNotFoundError:
@@ -61,8 +62,10 @@ def get_cell_type_metadata(nx_graph_files):
             json.dump(sequential_mapping, json_file, indent=2)
         with open(cell_type_freq_path, "w") as json_file:
             json.dump(sorted_cell_annotation_freq, json_file, indent=2)
+        with open(cell_annotations_dict_path, "w") as json_file:
+            json.dump(sorted_cell_annotation_freq, json_file, indent=2)
 
-    return sequential_mapping, sorted_cell_annotation_freq
+    return sequential_mapping, sorted_cell_annotation_freq, cell_annotations_dict
 
 
 def get_biomarker_metadata(nx_graph_files, file_loc=None):

@@ -9,17 +9,13 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from sklearn.metrics import precision_recall_curve, confusion_matrix, roc_curve, classification_report
 from sklearn.preprocessing import label_binarize
-from .mlflow_client_ import (
-    MLFLOW_CLIENT,
-    read_run_embeddings_df,
-    read_run_node_true_pred_labels,
-)
+from .mlflow_client_ import MLFLOW_CLIENT, read_run_embeddings_df, read_run_node_true_pred_labels, read_run_annotations
 from .plotly_helpers import COLORS_LIST
-from .experiment_config import ANNOTATION_DICT
 
 
 def plotly_classification_report_anime(exp_id, run_id, dataset_type):
     df = read_run_node_true_pred_labels(experiment_id=exp_id, run_id=run_id, train_or_test=dataset_type)
+    annotation_dict = read_run_annotations(exp_id, run_id)
     df["report"] = df.apply(
         lambda row: classification_report(row["true_labels"], row["pred_labels"], output_dict=True), axis=1
     )
@@ -36,7 +32,7 @@ def plotly_classification_report_anime(exp_id, run_id, dataset_type):
     plot_data = plot_data.rename(
         columns={"index": "metric", "value": "score", "Number": "Epoch", "variable": "cell_type"}
     )
-    plot_data["cell_type"] = plot_data["cell_type"].replace(ANNOTATION_DICT)
+    plot_data["cell_type"] = plot_data["cell_type"].replace(annotation_dict)
 
     # TODO: add attributes for which score, which plot type, also auc plots from sklearn.metrics
     print(plot_data)
@@ -44,9 +40,10 @@ def plotly_classification_report_anime(exp_id, run_id, dataset_type):
 
 def plotly_embeddings_anime_2d(experiment_id, run_id):
     df = read_run_embeddings_df(experiment_id, run_id)
+    annotation_dict = read_run_annotations(experiment_id, run_id)
 
     num_iterations = int(df["Number"].max() / 20)
-    cell_types_list = list(ANNOTATION_DICT.values()) + ["Unknown_Z"]
+    cell_types_list = list(annotation_dict.values())
     unique_colors = sorted(cell_types_list)
     color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
 
@@ -102,9 +99,9 @@ def plotly_embeddings_anime_2d(experiment_id, run_id):
 
 def plotly_embeddings_anime_3d(experiment_id, run_id):
     df = read_run_embeddings_df(experiment_id, run_id)
-
+    annotation_dict = read_run_annotations(experiment_id, run_id)
     num_iterations = int(df["Number"].max() / 20)
-    cell_types_list = list(ANNOTATION_DICT.values()) + ["Unknown_Z"]
+    cell_types_list = list(annotation_dict.values())
     unique_colors = sorted(cell_types_list)
     color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
 
@@ -168,7 +165,8 @@ def create_confusion_matrix(true_labels, pred_labels, labels):
 
 def plotly_confusion_matrix_anime(experiment_id, run_id, train_or_test="train"):
     df = read_run_node_true_pred_labels(experiment_id, run_id, train_or_test=train_or_test)
-    act_labels = [int(item) for item in ANNOTATION_DICT.keys()]
+    annotation_dict = read_run_annotations(experiment_id, run_id)
+    act_labels = [int(item) for item in annotation_dict.keys()]
     df["normalized_confusion_matrix"] = df.apply(
         lambda row: create_confusion_matrix(row["true_labels"], row["pred_labels"], labels=act_labels),
         axis=1,
@@ -181,16 +179,16 @@ def plotly_confusion_matrix_anime(experiment_id, run_id, train_or_test="train"):
     heatmap = go.Heatmap(
         z=np.nan_to_num(df.loc[0, "normalized_confusion_matrix"], nan=0.0),
         colorscale="Viridis",
-        x=list(ANNOTATION_DICT.values()),
-        y=list(ANNOTATION_DICT.values()),
+        x=list(annotation_dict.values()),
+        y=list(annotation_dict.values()),
     )
     frames = [
         go.Frame(
             data=[
                 go.Heatmap(
                     z=np.nan_to_num(df.loc[i, "normalized_confusion_matrix"], nan=0.0),
-                    x=list(ANNOTATION_DICT.values()),
-                    y=list(ANNOTATION_DICT.values()),
+                    x=list(annotation_dict.values()),
+                    y=list(annotation_dict.values()),
                 )
             ],
             name=str(df.loc[i, "Number"]),
@@ -276,7 +274,8 @@ def plotly_confusion_matrix_anime(experiment_id, run_id, train_or_test="train"):
 
 
 def plotly_precision_recall_curve_anime(experiment_id, run_id, train_or_test="train"):
-    class_names = [int(item) for item in list(ANNOTATION_DICT.keys())]
+    annotation_dict = read_run_annotations(experiment_id, run_id)
+    class_names = [int(item) for item in list(annotation_dict.keys())]
     df = read_run_node_true_pred_labels(experiment_id, run_id, pred_as_dist=True, train_or_test=train_or_test)
 
     # TODO: add attribute for filtering iterations in read_run_node_true_pred_labels
@@ -315,10 +314,10 @@ def plotly_precision_recall_curve_anime(experiment_id, run_id, train_or_test="tr
         )
         temp_df["precision"] = temp_df["precision"].astype(float)
         temp_df["recall"] = temp_df["recall"].astype(float)
-        temp_df["cell_type"] = [ANNOTATION_DICT[str(item)]] * len(temp_df)
+        temp_df["cell_type"] = [annotation_dict[str(item)]] * len(temp_df)
         plot_data.append(temp_df)
 
-    unique_colors = sorted(list(ANNOTATION_DICT.values()))
+    unique_colors = sorted(list(annotation_dict.values()))
     unique_colors.sort()
     color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
 

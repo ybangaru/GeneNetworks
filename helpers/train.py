@@ -2,7 +2,7 @@
 Helper functions for training node and graph classification models, including
 evaluation and model saving functions
 """
-
+import json
 import os
 import numpy as np
 import torch
@@ -74,6 +74,7 @@ def train_subgraph(
             "node_class_pred",
             "model",
             "scorefile",
+            "metadata",
         ]:
             if not os.path.exists(f"{directory_run_artifacts}/{item}"):
                 os.makedirs(f"{directory_run_artifacts}/{item}")
@@ -112,6 +113,12 @@ def train_subgraph(
         # Log all other keyword arguments dynamically
         for arg, value in kwargs.items():
             mlflow.log_param(arg, value)
+
+        # Log annotations dict
+        annotations_dict = dataset.annotations_dict
+        cell_annotations_dict_path = f"{directory_run_artifacts}/metadata/annotations_dict.json"
+        with open(cell_annotations_dict_path, "w") as f:
+            json.dump(annotations_dict, f, indent=2)
 
         model.zero_grad()
         best_node_loss_metric_value = float("inf")

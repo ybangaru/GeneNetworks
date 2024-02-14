@@ -171,6 +171,11 @@ def build_train_kwargs(network_type, graph_type, kwargs):
     CENTER_NODE_FEATURES_MASK = ["center_coord", "biomarker_expression"]
     EDGE_FEATURES = ["edge_type", "distance"]  # edge_type must be first variable (cell pair) features "edge_type",
     EDGE_FEATURES_MASK = None
+    EDGE_TYPES = {
+        "neighbor": 0,
+        "distant": 1,
+        "self": 2,
+    }
 
     dataset_kwargs = {
         "transform": [],
@@ -188,6 +193,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         "center_node_features_mask": CENTER_NODE_FEATURES_MASK,
         "edge_features": EDGE_FEATURES,
         "edge_features_mask": EDGE_FEATURES_MASK,
+        "edge_types": EDGE_TYPES,
         "graph_type": graph_type,
         "node_embedding_size": NODE_EMBEDDING_SIZE,
         "subgraph_size": SUBGRAPH_SIZE,  # indicating we want to sample 3-hop subgraphs from these regions (for training/inference), this is a core parameter for SPACE-GM.

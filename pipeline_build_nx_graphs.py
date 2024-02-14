@@ -4,28 +4,30 @@ and save them in the form of pickle files. These pickle files are then used for 
 """
 import warnings
 import multiprocessing
-
-from helpers import spatialPipeline, logger, NO_JOBS, ANNOTATION_DICT, SLICE_PIXELS_EDGE_CUTOFF, PROJECT_DIR
+from helpers import spatialPipeline, logger, NO_JOBS, DATA_DIR
 
 warnings.filterwarnings("ignore")
 
 
-all_liver_samples = ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"]
-data_filter_name = "Liver12Slice12"
-leiden_resolution = 0.7
+# samples_list = ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"]
+# data_filter_name = "Liver12Slice12"
+# leiden_resolution = 0.7
+
 
 data_options = {
-    "dir_loc": f"{PROJECT_DIR}/",
-    "names_list": all_liver_samples,
+    "data_dir": DATA_DIR,
+    # "names_list": [] optional
     "mlflow_config": {
-        "id": None,
-        "data_filter_name": data_filter_name,
-        "leiden_resolution": leiden_resolution,
+        "run_id": "c750f81070fa4ccbbd731b92746bebc6",
+        # "slides_name": data_filter_name,
+        # "resolution": leiden_resolution,
     },
+    "cell_type_column": "Annotation_2",
+    "base_microns_for_edge_cutoff": 5,
 }
 pipeline_instance = spatialPipeline(options=data_options)
-pipeline_instance.data.obs["cell_type"] = pipeline_instance.data.obs["leiden_res"].map(ANNOTATION_DICT)
-
+pipeline_instance.data.obs["cell_type"] = pipeline_instance.data.obs[data_options["cell_type_column"]]
+pipeline_instance.build_network_edge_cutoffs(data_options["base_microns_for_edge_cutoff"])
 
 NODE_FEATURES = [
     "cell_type",
@@ -56,7 +58,6 @@ pretransform_networkx_configs = [
             "type": "Delaunay",
             "bound_type": "",
         },
-        "neighbor_edge_cutoff": SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"],
     },
     {
         "boundary_type": "given",
@@ -64,7 +65,6 @@ pretransform_networkx_configs = [
             "type": "Delaunay",
             "bound_type": "",
         },
-        "neighbor_edge_cutoff": SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"],
     },
     {
         "boundary_type": "given",
@@ -73,7 +73,6 @@ pretransform_networkx_configs = [
             "bound_type": "rectangle",
             "threshold_distance": 0,
         },
-        "neighbor_edge_cutoff": SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"],
     },
     {
         "boundary_type": "given",
@@ -82,7 +81,6 @@ pretransform_networkx_configs = [
             "bound_type": "rotated_rectangle",
             "threshold_distance": 0,
         },
-        "neighbor_edge_cutoff": SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"],
     },
     {
         "boundary_type": "given",
@@ -90,12 +88,11 @@ pretransform_networkx_configs = [
             "type": "MST",
             "bound_type": "",
         },
-        "neighbor_edge_cutoff": SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"],
     },
 ]
 
 all_slices_names_grid = []
-for item_slice in all_liver_samples:
+for item_slice in pipeline_instance.slides_list:
     for x_index in list(range(20)):
         for y_index in list(range(20)):
             temp_segment_config = {
@@ -103,9 +100,10 @@ for item_slice in all_liver_samples:
                 "sample_name": item_slice,
                 "region_id": (x_index, y_index),
                 "padding": {
-                    "value": SLICE_PIXELS_EDGE_CUTOFF[item_slice] * 40,
+                    "value": pipeline_instance.slice_pixels_edge_cutoff[item_slice] * 40,
                     "units": "pixels",
                 },
+                "neighbor_edge_cutoff": pipeline_instance.slice_pixels_edge_cutoff[item_slice],
             }
             all_slices_names_grid.append(temp_segment_config)
 
@@ -146,10 +144,10 @@ def main():
     ]
 
     # Create a multiprocessing Pool and execute the function in parallel
-    with multiprocessing.Pool(processes=NO_JOBS) as pool:
-        pool.starmap(parallel_function, func_args)
+    # with multiprocessing.Pool(processes=NO_JOBS) as pool:
+    #     pool.starmap(parallel_function, func_args)
 
-    # parallel_function(*func_args[250])
+    parallel_function(*func_args[250])
 
 
 if __name__ == "__main__":

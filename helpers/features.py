@@ -9,7 +9,6 @@ import warnings
 import torch
 import torch_geometric as tg
 
-from .experiment_config import EDGE_TYPES
 from .graph_build import extract_boundary_features
 
 
@@ -210,7 +209,7 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
     # Edge features
     elif edge_ind is not None and node_ind is None:
         if feature_item == "edge_type":
-            v = [EDGE_TYPES[G.edges[edge_ind]["edge_type"]]]
+            v = [feature_kwargs["edge_types"][G.edges[edge_ind]["edge_type"]]]
             return v
         elif feature_item == "distance":
             v = process_edge_distance(G, edge_ind, **feature_kwargs)
