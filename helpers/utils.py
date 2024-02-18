@@ -7,69 +7,67 @@ Created on Thu Jul 22 14:53:12 2021
 import json
 import os
 import numpy as np
+import pandas as pd
 import pickle
 
 
 def get_cell_type_metadata(nx_graph_files):
-    """Find all unique cell types from a list of cellular graphs
+    """
+    Read cell type metadata info from clustering/networkx segment config directory,
+    defaults to mlflow run directory at init config in pipeline_build_nx_graphs.py
 
     Args:
         nx_graph_files (list/str): path/list of paths to cellular graph files (gpickle)
 
     Returns:
-        cell_type_mapping (dict): mapping of unique cell types to integer indices
-        cell_type_freq (dict): mapping of unique cell types to their frequency
+        cell_type_hashmap (dict): mapping of unique cell types to integer indices
+        cell_type_proportion (dict): mapping of unique cell types to their frequency
     """
     if isinstance(nx_graph_files, str):
         nx_graph_files = [nx_graph_files]
 
     directory_path = os.path.dirname(os.path.dirname(nx_graph_files[0]))
+
     cell_type_mapping_path = os.path.join(directory_path, "cell_type_mapping.json")
-    cell_annotations_dict_path = os.path.join(directory_path, "cell_annotations_dict.json")
     cell_type_freq_path = os.path.join(directory_path, "cell_type_freq.json")
-    cell_annotation_frequencies_path = os.path.join(directory_path, "cell_annotation_freq.json")
+    cell_type_color_path = os.path.join(directory_path, "color_dict.json")
 
     try:
-        sequential_mapping = json.load(open(cell_type_mapping_path))
-        cell_annotations_dict = json.load(open(cell_type_mapping_path))
-        sorted_cell_annotation_freq = json.load(open(cell_annotation_frequencies_path))
+        cell_type_hashmap = json.load(open(cell_type_mapping_path))
+        cell_type_proportion = json.load(open(cell_type_freq_path))
 
     except FileNotFoundError:
-        cell_type_mapping = {}
-        for g_f in nx_graph_files:
-            G = pickle.load(open(g_f, "rb"))
+        # cell_type_mapping = {}
+        cell_metadata_loc = os.path.join(directory_path, "cell_type_to_id.json")
+        if os.path.exists(cell_metadata_loc):
+            with open(cell_metadata_loc, "r") as f:
+                cell_metadata = json.load(f)
+        else:
+            raise FileNotFoundError(f"cell_type_to_id.json not found in {directory_path}")
 
-            assert "cell_type" in G.nodes[0]
-            for n in G.nodes:
-                ct = G.nodes[n]["cell_type"]
-                if ct not in cell_type_mapping:
-                    cell_type_mapping[ct] = 0
-                cell_type_mapping[ct] += 1
-
-        unique_cell_types_sum = sum(list(cell_type_mapping.values()))
-        unique_cell_type_freq = {item: cell_type_mapping[item] / unique_cell_types_sum for item in cell_type_mapping}
-
-        sequential_mapping = {key: index for index, key in enumerate(cell_type_mapping.keys())}
-        sorted_cell_annotation_freq = dict(
-            sorted(
-                unique_cell_type_freq.items(),
-                key=lambda item: item[1],
-                reverse=True,
-            )
-        )
+        # count values of each cell type
+        sequential_mapping = {k: len(v) for k, v in cell_metadata.items()}
+        # sort mapping dictionary by frequency of cell types in descending order
+        sequential_mapping = dict(sorted(sequential_mapping.items(), key=lambda item: item[1], reverse=True))
+        # create a dictionary with the cell type and an index for each cell type starting from 0 for the most frequent
+        cell_type_hashmap = {key: index for index, key in enumerate(sequential_mapping.keys())}
+        # create a dictionary with the cell type and the proportion of cells of that type
+        total_cells = sum(sequential_mapping.values())
+        cell_type_proportion = {k: v / total_cells for k, v in sequential_mapping.items()}
 
         with open(cell_type_mapping_path, "w") as json_file:
-            json.dump(sequential_mapping, json_file, indent=2)
+            json.dump(cell_type_hashmap, json_file, indent=2)
         with open(cell_type_freq_path, "w") as json_file:
-            json.dump(sorted_cell_annotation_freq, json_file, indent=2)
-        with open(cell_annotations_dict_path, "w") as json_file:
-            json.dump(sorted_cell_annotation_freq, json_file, indent=2)
+            json.dump(cell_type_proportion, json_file, indent=2)
 
-    return sequential_mapping, sorted_cell_annotation_freq, cell_annotations_dict
+    cell_type_color = json.load(open(cell_type_color_path))
+    return cell_type_hashmap, cell_type_proportion, cell_type_color
 
 
-def get_biomarker_metadata(nx_graph_files, file_loc=None):
-    """Load all biomarkers from a list of cellular graphs
+def get_biomarker_metadata(nx_graph_files):
+    """
+    Read cell biomarker metadata info from clustering/networkx segment config directory,
+    defaults to mlflow run directory at init config in pipeline_build_nx_graphs.py
 
     Args:
         nx_graph_files (list/str): path/list of paths to cellular graph files (gpickle)
@@ -78,22 +76,38 @@ def get_biomarker_metadata(nx_graph_files, file_loc=None):
         shared_bms (list): list of biomarkers shared by all cells (intersect)
         all_bms (list): list of all biomarkers (union)
     """
+
     if isinstance(nx_graph_files, str):
         nx_graph_files = [nx_graph_files]
-    all_bms = set()
-    shared_bms = None
-    for g_f in nx_graph_files:
-        G = pickle.load(open(g_f, "rb"))
-        for n in G.nodes:
-            bms = sorted(G.nodes[n]["biomarker_expression"].keys())
-            for bm in bms:
-                all_bms.add(bm)
-            valid_bms = [
-                bm for bm in bms if G.nodes[n]["biomarker_expression"][bm] == G.nodes[n]["biomarker_expression"][bm]
-            ]
-            shared_bms = set(valid_bms) if shared_bms is None else shared_bms & set(valid_bms)
-    shared_bms = sorted(shared_bms)
-    all_bms = sorted(all_bms)
+
+    directory_path = os.path.dirname(os.path.dirname(os.path.dirname(nx_graph_files[0])))
+    shared_bms_loc = os.path.join(directory_path, "biomarkers_list_shared.csv")
+    all_bms_loc = os.path.join(directory_path, "biomarkers_list_all.csv")
+
+    try:
+        shared_bms = pd.read_csv(shared_bms_loc, header=None).values.flatten().tolist()
+        all_bms = pd.read_csv(all_bms_loc, header=None).values.flatten().tolist()
+
+    except FileNotFoundError:
+        all_bms = set()
+        shared_bms = None
+        for g_f in nx_graph_files:
+            G = pickle.load(open(g_f, "rb"))
+            for n in G.nodes:
+                bms = sorted(G.nodes[n]["biomarker_expression"].keys())
+                for bm in bms:
+                    all_bms.add(bm)
+                valid_bms = [
+                    bm for bm in bms if G.nodes[n]["biomarker_expression"][bm] == G.nodes[n]["biomarker_expression"][bm]
+                ]
+                shared_bms = set(valid_bms) if shared_bms is None else shared_bms & set(valid_bms)
+        shared_bms = sorted(shared_bms)
+        all_bms = sorted(all_bms)
+
+        # save csv files for shared and all biomarkers
+        pd.DataFrame(shared_bms).to_csv(shared_bms_loc, header=None, index=False)
+        pd.DataFrame(all_bms).to_csv(all_bms_loc, header=None, index=False)
+
     return shared_bms, all_bms
 
 

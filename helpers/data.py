@@ -28,7 +28,6 @@ from .features import get_feature_names, nx_to_tg_graph
 from .graph_build import plot_graph
 from .logging_setup import logger
 
-# from .plotly_helpers import plotly_spatial_scatter_subgraph
 from .utils import (
     get_cell_type_metadata,
     get_biomarker_metadata,
@@ -45,13 +44,13 @@ class CellularGraphDataset(Dataset):
         root,
         transform=[],
         pre_transform=None,
-        raw_folder_name="graph",
-        processed_folder_name="tg_graph",
+        raw_folder_name="nx_files",
+        processed_folder_name="nx_files_processed",
         node_features=[
             "cell_type",
-            "expression",
-            "neighborhood_composition",
+            "biomarker_expression",
             "center_coord",
+            "volume",
         ],
         edge_features=["edge_type", "distance"],
         edge_types=None,
@@ -62,8 +61,6 @@ class CellularGraphDataset(Dataset):
         subgraph_source="on-the-fly",
         subgraph_allow_distant_edge=True,
         subgraph_radius_limit=-1,
-        sampling_avoid_unassigned=True,
-        unassigned_cell_type="Unassigned",
         **feature_kwargs,
     ):
         """Initialize the dataset
@@ -89,8 +86,6 @@ class CellularGraphDataset(Dataset):
             subgraph_allow_distant_edge (bool): whether to consider distant edges
             subgraph_radius_limit (float): radius (distance to center cell in pixel) limit for subgraphs,
                 -1 means no limit
-            sampling_avoid_unassigned (bool): whether to avoid sampling cells with unassigned cell type
-            unassigned_cell_type (str): name of the unassigned cell type
             feature_kwargs (dict): optional arguments for processing features
                 see `features.process_features` for details
         """
@@ -103,7 +98,7 @@ class CellularGraphDataset(Dataset):
         # Find all unique cell types in the dataset
         if cell_type_mapping is None or cell_type_freq is None:
             nx_graph_files = [os.path.join(self.raw_dir, f) for f in self.raw_file_names]
-            (self.cell_type_mapping, self.cell_type_freq, self.annotation_dict) = get_cell_type_metadata(nx_graph_files)
+            self.cell_type_mapping, self.cell_type_freq, self.cell_type_color = get_cell_type_metadata(nx_graph_files)
         else:
             self.cell_type_mapping = cell_type_mapping
             self.cell_type_freq = cell_type_freq
@@ -148,7 +143,7 @@ class CellularGraphDataset(Dataset):
         # Transformations, e.g. masking features, adding graph-level labels
         self.transform = transform
 
-        # SPACE-GM uses n-hop ego graphs (subgraphs) to perform prediction
+        # Using n-hop ego graphs (subgraphs) to perform prediction
         self.subgraph_size = subgraph_size  # number of hops, 0 = use full graph
         self.subgraph_source = subgraph_source
         self.subgraph_allow_distant_edge = subgraph_allow_distant_edge
@@ -159,15 +154,11 @@ class CellularGraphDataset(Dataset):
 
         self.N = len(self.processed_paths)
         self.region_ids = [self.get_full(i).region_id for i in range(self.N)]
-        # Sampling frequency for each cell type
+        # inverse cell proportions for each cell type
         self.sampling_freq = {
             self.cell_type_mapping[ct]: 1.0 / (self.cell_type_freq[ct] + 1e-5) for ct in self.cell_type_mapping
         }
         self.sampling_freq = torch.from_numpy(np.array([self.sampling_freq[i] for i in range(len(self.sampling_freq))]))
-        # Avoid sampling unassigned cell
-        self.unassigned_cell_type = unassigned_cell_type
-        if sampling_avoid_unassigned and unassigned_cell_type in self.cell_type_mapping:
-            self.sampling_freq[self.cell_type_mapping[unassigned_cell_type]] = 0.0
 
     def set_indices(self, inds=None):
         """Limit subgraph sampling to a subset of region indices,
@@ -471,6 +462,7 @@ class CellularGraphDataset(Dataset):
 
         return buffer
 
+    # TODO: implement plotly version of the subgraph plot
     # def build_subgraph_plotly(self, idx, center_ind):
     #     data = self.get_full(idx)
     #     # if not self.subgraph_allow_distant_edge:
