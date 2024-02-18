@@ -53,6 +53,7 @@ def train_node_classification(dataset_kwargs):
         # number of embeddings for different cell types (plus one placeholder cell type)
         "num_feat": dataset[0].x.shape[1] - 1,  # exclude the cell type column
         "emb_dim": dataset_kwargs["node_embedding_size"],
+        "emb_dim_edge": dataset_kwargs["edge_embedding_size"],
         "num_node_tasks": len(
             dataset.cell_type_mapping
         ),  # A multi-class classification task: predicting center cell type
@@ -137,6 +138,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
     SUBGRAPH_RADIUS_LIMIT = 184
     # NEIGHBORHOOD_SIZE = 15  # 15 * SUBGRAPH_SIZE
     NODE_EMBEDDING_SIZE = 130
+    EDGE_EMBEDDING_SIZE = 130
 
     # TODO: test feature/layer normalization instead of batch normalization for training as shape features
     # features are resulting in overfitting and poor generalization
@@ -170,6 +172,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
     }
 
     dataset_kwargs = {
+        "clustering_run_id": kwargs["mlflow_config"]["id"],
         "transform": [],
         "pre_transform": None,
         "dataset_root": dataset_root,
@@ -184,6 +187,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         "edge_types": EDGE_TYPES,
         "graph_type": graph_type,
         "node_embedding_size": NODE_EMBEDDING_SIZE,
+        "edge_embedding_size": EDGE_EMBEDDING_SIZE,
         "subgraph_size": SUBGRAPH_SIZE,  # indicating we want to sample 3-hop subgraphs from these regions (for training/inference), this is a core parameter for SPACE-GM.
         "subgraph_source": "on-the-fly",
         "subgraph_allow_distant_edge": True,

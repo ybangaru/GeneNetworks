@@ -17,6 +17,7 @@ from torch_geometric.nn import (
 import torch.nn.functional as F
 from torch_scatter import scatter_add
 from torch_geometric.nn.inits import glorot, zeros
+from helpers import logger
 
 
 class GINConv(MessagePassing):
@@ -59,6 +60,13 @@ class GINConv(MessagePassing):
         return self.propagate(edge_index, x=x, edge_attr=edge_embeddings)
 
     def message(self, x_j, edge_attr):
+        if x_j.shape[1] != edge_attr.shape[1]:
+            if self.aggr == "add":
+                logger.error("Aggregation type is add, but the dimensions of x_j and edge_attr do not match.")
+                return
+        if not self.aggr == "add":
+            # TODO: Implement other aggregation types when node, edge embbings have different dimensions
+            raise NotImplementedError("Aggregation type other than add is not implemented yet.")
         return x_j + edge_attr
 
     def update(self, aggr_out):
@@ -219,6 +227,7 @@ class GNN(torch.nn.Module):
         num_node_type=None,
         num_feat=38,
         emb_dim=256,
+        emb_dim_edge=256,
         node_embedding_output="last",
         drop_ratio=0,
         gnn_type="gin",
@@ -242,32 +251,32 @@ class GNN(torch.nn.Module):
         self.gnns = torch.nn.ModuleList()
         for layer in range(num_layer):
             if gnn_type == "gin":
-                self.gnns.append(GINConv(emb_dim, no_edge_types=len(edge_type_dict), aggr="add"))
+                self.gnns.append(GINConv(emb_dim_edge, no_edge_types=len(edge_type_dict), aggr="add"))
             elif gnn_type == "gcn":
                 self.gnns.append(
                     GCNConv(
-                        emb_dim,
+                        emb_dim_edge,
                         no_edge_types=len(edge_type_dict),
                     )
                 )
             elif gnn_type == "gat":
                 self.gnns.append(
                     GATConv(
-                        emb_dim,
+                        emb_dim_edge,
                         no_edge_types=len(edge_type_dict),
                     )
                 )
             elif gnn_type == "graphsage":
                 self.gnns.append(
                     GraphSAGEConv(
-                        emb_dim,
+                        emb_dim_edge,
                         no_edge_types=len(edge_type_dict),
                     )
                 )
 
         self.batch_norms = torch.nn.ModuleList()
         for layer in range(num_layer):
-            self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
+            self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim_edge))
 
     def forward(self, *argv):
         if len(argv) == 3:
@@ -345,6 +354,7 @@ class GNN_pred(torch.nn.Module):
         num_node_type=None,
         num_feat=38,
         emb_dim=256,
+        emb_dim_edge=256,
         num_additional_feat=0,
         num_node_tasks=15,
         num_graph_tasks=2,
@@ -358,6 +368,7 @@ class GNN_pred(torch.nn.Module):
         super(GNN_pred, self).__init__()
         self.drop_ratio = drop_ratio
         self.emb_dim = emb_dim
+        self.emb_dim_edge = emb_dim_edge
         self.num_node_tasks = num_node_tasks
         self.num_graph_tasks = num_graph_tasks
         self.return_node_embedding = return_node_embedding
@@ -367,6 +378,7 @@ class GNN_pred(torch.nn.Module):
             num_node_type,
             num_feat,
             emb_dim,
+            emb_dim_edge,
             node_embedding_output=node_embedding_output,
             drop_ratio=drop_ratio,
             gnn_type=gnn_type,

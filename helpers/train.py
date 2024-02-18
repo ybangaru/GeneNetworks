@@ -219,7 +219,7 @@ def train_subgraph(
                 # edge embeddings
                 if log_edge_embeddings:
                     for ind, layer_item in enumerate(model.gnn.gnns):
-                        edge_embeddings_filename = f"{directory_run_artifacts}/embeddings/gin_edge{ind+1}_{i_iter}.npy"
+                        edge_embeddings_filename = f"{directory_run_artifacts}/embeddings/{dataset_kwargs['graph_type']}_edge{ind+1}_{i_iter}.npy"
                         edge_embeddings = layer_item.edge_embedding.weight.detach().cpu().numpy()
                         np.save(edge_embeddings_filename, edge_embeddings)
 
