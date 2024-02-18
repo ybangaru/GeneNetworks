@@ -69,6 +69,7 @@ def train_subgraph(
         directory_run_artifacts = f"{MLFLOW_TRACKING_URI}{run.info.experiment_id}/{run.info.run_id}/artifacts"
         for item in [
             "embeddings",
+            "embeddings_features",
             "node_probs",
             "node_class",
             "node_class_pred",
@@ -80,6 +81,34 @@ def train_subgraph(
                 os.makedirs(f"{directory_run_artifacts}/{item}")
         kwargs["model_folder"] = f"{directory_run_artifacts}/model"
         kwargs["score_file"] = f"{directory_run_artifacts}/scorefile/results.txt"
+
+        cell_mapping_filename = f"{directory_run_artifacts}/metadata/cell_mapping.json"
+        cell_type_freq_filename = f"{directory_run_artifacts}/metadata/cell_type_freq.json"
+        cell_type_color_filename = f"{directory_run_artifacts}/metadata/cell_type_color.json"
+
+        with open(cell_mapping_filename, "w") as json_file:
+            json.dump(dataset.cell_type_mapping, json_file, indent=2)
+        with open(cell_type_freq_filename, "w") as json_file:
+            json.dump(dataset.cell_type_freq, json_file, indent=2)
+        with open(cell_type_color_filename, "w") as json_file:
+            json.dump(dataset.cell_type_color, json_file, indent=2)
+
+        # use the indices to find the corresponding region ids
+        train_regions = {dataset.region_ids[i]: i for i in train_inds}
+        valid_regions = {dataset.region_ids[i]: i for i in valid_inds}
+        with open(f"{directory_run_artifacts}/metadata/feature_info.json", "w") as json_file:
+            json.dump(
+                {
+                    "node_feature_names": dataset.node_feature_names,
+                    "edge_feature_names": dataset.edge_feature_names,
+                },
+                json_file,
+                indent=2,
+            )
+        with open(f"{directory_run_artifacts}/metadata/regions_train.json", "w") as json_file:
+            json.dump(train_regions, json_file, indent=2)
+        with open(f"{directory_run_artifacts}/metadata/regions_valid.json", "w") as json_file:
+            json.dump(valid_regions, json_file, indent=2)
 
         for arg, value in dataset_kwargs.items():
             try:
@@ -112,13 +141,12 @@ def train_subgraph(
 
         # Log all other keyword arguments dynamically
         for arg, value in kwargs.items():
-            mlflow.log_param(arg, value)
-
-        # Log annotations dict
-        annotations_dict = dataset.annotations_dict
-        cell_annotations_dict_path = f"{directory_run_artifacts}/metadata/annotations_dict.json"
-        with open(cell_annotations_dict_path, "w") as f:
-            json.dump(annotations_dict, f, indent=2)
+            try:
+                if type(value) is np.ndarray or type(value) is list:
+                    value = ",".join(map(str, value))
+                mlflow.log_param(arg, value)
+            except Exception as e:
+                logger.error(f"Failed to log {arg} with value {value} due to {e}")
 
         model.zero_grad()
         best_node_loss_metric_value = float("inf")
@@ -171,16 +199,19 @@ def train_subgraph(
             # Log embeddings
             if i_iter > 0 and i_iter % embedding_log_freq == 0:
                 embeddings = model.gnn.x_embedding.weight.detach().cpu().numpy()
+                embeddings_features = model.gnn.feat_embedding.weight.detach().cpu().numpy()
                 node_classes = node_y.cpu().numpy()
                 node_classes_pred = res[0].detach().cpu().numpy()
                 node_probs = torch.nn.functional.softmax(res[0], dim=1).detach().cpu().numpy()
 
                 embedding_filename = f"{directory_run_artifacts}/embeddings/{i_iter}.npy"
+                embedding_features_filename = f"{directory_run_artifacts}/embeddings_features/{i_iter}.npy"
                 node_probs_filename = f"{directory_run_artifacts}/node_probs/{i_iter}.npy"
                 node_classes_filename = f"{directory_run_artifacts}/node_class/{i_iter}.npy"
                 node_classes_pred_filename = f"{directory_run_artifacts}/node_class_pred/{i_iter}.npy"
 
                 np.save(embedding_filename, embeddings)
+                np.save(embedding_features_filename, embeddings_features)
                 np.save(node_probs_filename, node_probs)
                 np.save(node_classes_filename, node_classes)
                 np.save(node_classes_pred_filename, node_classes_pred)

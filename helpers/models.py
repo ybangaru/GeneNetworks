@@ -222,11 +222,13 @@ class GNN(torch.nn.Module):
         node_embedding_output="last",
         drop_ratio=0,
         gnn_type="gin",
+        edge_type_dict=None,
     ):
         super(GNN, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
         self.node_embedding_output = node_embedding_output
+        self.no_edge_types = len(edge_type_dict)
 
         # if self.num_layer < 2:
         #     raise ValueError("Number of GNN layers must be greater than 1.")
@@ -240,13 +242,28 @@ class GNN(torch.nn.Module):
         self.gnns = torch.nn.ModuleList()
         for layer in range(num_layer):
             if gnn_type == "gin":
-                self.gnns.append(GINConv(emb_dim, aggr="add"))
+                self.gnns.append(GINConv(emb_dim, no_edge_types=len(edge_type_dict), aggr="add"))
             elif gnn_type == "gcn":
-                self.gnns.append(GCNConv(emb_dim))
+                self.gnns.append(
+                    GCNConv(
+                        emb_dim,
+                        no_edge_types=len(edge_type_dict),
+                    )
+                )
             elif gnn_type == "gat":
-                self.gnns.append(GATConv(emb_dim))
+                self.gnns.append(
+                    GATConv(
+                        emb_dim,
+                        no_edge_types=len(edge_type_dict),
+                    )
+                )
             elif gnn_type == "graphsage":
-                self.gnns.append(GraphSAGEConv(emb_dim))
+                self.gnns.append(
+                    GraphSAGEConv(
+                        emb_dim,
+                        no_edge_types=len(edge_type_dict),
+                    )
+                )
 
         self.batch_norms = torch.nn.ModuleList()
         for layer in range(num_layer):
@@ -278,7 +295,7 @@ class GNN(torch.nn.Module):
 
         h_list = [x]
         for layer in range(self.num_layer):
-            h = self.gnns[layer](h_list[layer], edge_index, edge_attr)
+            h = self.gnns[layer](h_list[layer], edge_index, edge_attr, self.no_edge_types)
             h = self.batch_norms[layer](h)
             if layer == self.num_layer - 1:
                 # remove relu for the last layer
@@ -336,6 +353,7 @@ class GNN_pred(torch.nn.Module):
         graph_pooling="mean",
         gnn_type="gin",
         return_node_embedding=False,
+        edge_types=None,
     ):
         super(GNN_pred, self).__init__()
         self.drop_ratio = drop_ratio
@@ -352,6 +370,7 @@ class GNN_pred(torch.nn.Module):
             node_embedding_output=node_embedding_output,
             drop_ratio=drop_ratio,
             gnn_type=gnn_type,
+            edge_type_dict=edge_types,
         )
 
         # Different kind of graph pooling
