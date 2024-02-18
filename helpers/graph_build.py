@@ -19,8 +19,6 @@ import geopandas as gpd
 from rtree import index
 import cv2
 
-from .experiment_config import RADIUS_RELAXATION, NEIGHBOR_EDGE_CUTOFF
-
 
 def plot_voronoi_polygons(voronoi_polygons, voronoi_polygon_colors=None):
     """Plot voronoi polygons for the cellular graph
@@ -348,7 +346,7 @@ def build_graph_from_cell_coords(cell_data, cell_boundaries, boundary_augments, 
     return G, node_to_cell_mapping
 
 
-def build_graph_from_voronoi_polygons(voronoi_polygons, radius_relaxation=RADIUS_RELAXATION):
+def build_graph_from_voronoi_polygons(voronoi_polygons, radius_relaxation=None):
     """Construct a networkx graph based on voronoi polygons
 
     Args:
@@ -540,7 +538,7 @@ def assign_attributes(
     cell_data,
     cell_boundaries,
     node_to_cell_mapping,
-    neighbor_edge_cutoff=NEIGHBOR_EDGE_CUTOFF,
+    neighbor_edge_cutoff=None,
     padding_dict=None,
 ):
     """Assign node and edge attributes to the cellular graph

@@ -17,7 +17,7 @@ from torch_geometric.nn import (
 import torch.nn.functional as F
 from torch_scatter import scatter_add
 from torch_geometric.nn.inits import glorot, zeros
-from helpers import NUM_NODE_TYPE, NUM_EDGE_TYPE  # neighbor, distant, self
+from helpers import logger
 
 
 class GINConv(MessagePassing):
@@ -30,7 +30,7 @@ class GINConv(MessagePassing):
     See https://arxiv.org/abs/1810.00826
     """
 
-    def __init__(self, emb_dim, aggr="add"):
+    def __init__(self, emb_dim, no_edge_types, aggr="add"):
         super(GINConv, self).__init__()
 
         # Multi-layer perceptron
@@ -39,18 +39,18 @@ class GINConv(MessagePassing):
             torch.nn.ReLU(),
             torch.nn.Linear(2 * emb_dim, emb_dim),
         )
-        self.edge_embedding = torch.nn.Embedding(NUM_EDGE_TYPE, emb_dim)
+        self.edge_embedding = torch.nn.Embedding(no_edge_types, emb_dim)
 
         torch.nn.init.xavier_uniform_(self.edge_embedding.weight.data)
         self.aggr = aggr
 
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, x, edge_index, edge_attr, no_edge_types):
         # add self loops
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
 
         # add features corresponding to self-loop edges.
         self_loop_attr = torch.zeros(x.size(0), edge_attr.size(1))
-        self_loop_attr[:, 0] = NUM_EDGE_TYPE - 1
+        self_loop_attr[:, 0] = no_edge_types - 1
         self_loop_attr = self_loop_attr.to(edge_attr.device).to(edge_attr.dtype)
         edge_attr = torch.cat((edge_attr, self_loop_attr), dim=0)
 
@@ -60,6 +60,13 @@ class GINConv(MessagePassing):
         return self.propagate(edge_index, x=x, edge_attr=edge_embeddings)
 
     def message(self, x_j, edge_attr):
+        if x_j.shape[1] != edge_attr.shape[1]:
+            if self.aggr == "add":
+                logger.error("Aggregation type is add, but the dimensions of x_j and edge_attr do not match.")
+                return
+        if not self.aggr == "add":
+            # TODO: Implement other aggregation types when node, edge embbings have different dimensions
+            raise NotImplementedError("Aggregation type other than add is not implemented yet.")
         return x_j + edge_attr
 
     def update(self, aggr_out):
@@ -67,12 +74,12 @@ class GINConv(MessagePassing):
 
 
 class GCNConv(MessagePassing):
-    def __init__(self, emb_dim, aggr="add"):
+    def __init__(self, emb_dim, no_edge_types, aggr="add"):
         super(GCNConv, self).__init__()
 
         self.emb_dim = emb_dim
         self.linear = torch.nn.Linear(emb_dim, emb_dim)
-        self.edge_embedding = torch.nn.Embedding(NUM_EDGE_TYPE, emb_dim)
+        self.edge_embedding = torch.nn.Embedding(no_edge_types, emb_dim)
 
         torch.nn.init.xavier_uniform_(self.edge_embedding.weight.data)
         self.aggr = aggr
@@ -87,13 +94,13 @@ class GCNConv(MessagePassing):
 
         return deg_inv_sqrt[row] * edge_weight * deg_inv_sqrt[col]
 
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, x, edge_index, edge_attr, no_edge_types):
         # add self loops
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
 
         # add features corresponding to self-loop edges.
         self_loop_attr = torch.zeros(x.size(0), edge_attr.size(1))
-        self_loop_attr[:, 0] = NUM_EDGE_TYPE - 1
+        self_loop_attr[:, 0] = no_edge_types - 1
         self_loop_attr = self_loop_attr.to(edge_attr.device).to(edge_attr.dtype)
         edge_attr = torch.cat((edge_attr, self_loop_attr), dim=0)
 
@@ -109,7 +116,7 @@ class GCNConv(MessagePassing):
 
 
 class GATConv(MessagePassing):
-    def __init__(self, emb_dim, heads=2, negative_slope=0.2, aggr="add"):
+    def __init__(self, emb_dim, no_edge_types=None, heads=2, negative_slope=0.2, aggr="add"):
         super(GATConv, self).__init__()
 
         self.aggr = aggr
@@ -122,7 +129,7 @@ class GATConv(MessagePassing):
         self.att = torch.nn.Parameter(torch.Tensor(1, heads, 2 * emb_dim))
         self.bias = torch.nn.Parameter(torch.Tensor(emb_dim))
 
-        self.edge_embedding = torch.nn.Embedding(NUM_EDGE_TYPE, heads * emb_dim)
+        self.edge_embedding = torch.nn.Embedding(no_edge_types, heads * emb_dim)
         torch.nn.init.xavier_uniform_(self.edge_embedding.weight.data)
         self.reset_parameters()
 
@@ -130,13 +137,13 @@ class GATConv(MessagePassing):
         glorot(self.att)
         zeros(self.bias)
 
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, x, edge_index, edge_attr, no_edge_types):
         # add self loops
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
 
         # add features corresponding to self-loop edges.
         self_loop_attr = torch.zeros(x.size(0), edge_attr.size(1))
-        self_loop_attr[:, 0] = NUM_EDGE_TYPE - 1
+        self_loop_attr[:, 0] = no_edge_types - 1
         self_loop_attr = self_loop_attr.to(edge_attr.device).to(edge_attr.dtype)
         edge_attr = torch.cat((edge_attr, self_loop_attr), dim=0)
 
@@ -167,23 +174,23 @@ class GATConv(MessagePassing):
 
 
 class GraphSAGEConv(MessagePassing):
-    def __init__(self, emb_dim, aggr="mean"):
+    def __init__(self, emb_dim, no_edge_types, aggr="mean"):
         super(GraphSAGEConv, self).__init__()
 
         self.emb_dim = emb_dim
         self.linear = torch.nn.Linear(emb_dim, emb_dim)
-        self.edge_embedding = torch.nn.Embedding(NUM_EDGE_TYPE, emb_dim)
+        self.edge_embedding = torch.nn.Embedding(no_edge_types, emb_dim)
 
         torch.nn.init.xavier_uniform_(self.edge_embedding.weight.data)
         self.aggr = aggr
 
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, x, edge_index, edge_attr, no_edge_types):
         # add self loops
         edge_index, _ = add_self_loops(edge_index, num_nodes=x.size(0))
 
         # add features corresponding to self-loop edges.
         self_loop_attr = torch.zeros(x.size(0), edge_attr.size(1))
-        self_loop_attr[:, 0] = NUM_EDGE_TYPE - 1
+        self_loop_attr[:, 0] = no_edge_types - 1
         self_loop_attr = self_loop_attr.to(edge_attr.device).to(edge_attr.dtype)
         edge_attr = torch.cat((edge_attr, self_loop_attr), dim=0)
 
@@ -217,17 +224,20 @@ class GNN(torch.nn.Module):
     def __init__(
         self,
         num_layer=3,
-        num_node_type=NUM_NODE_TYPE,
+        num_node_type=None,
         num_feat=38,
         emb_dim=256,
+        emb_dim_edge=256,
         node_embedding_output="last",
         drop_ratio=0,
         gnn_type="gin",
+        edge_type_dict=None,
     ):
         super(GNN, self).__init__()
         self.num_layer = num_layer
         self.drop_ratio = drop_ratio
         self.node_embedding_output = node_embedding_output
+        self.no_edge_types = len(edge_type_dict)
 
         # if self.num_layer < 2:
         #     raise ValueError("Number of GNN layers must be greater than 1.")
@@ -241,17 +251,32 @@ class GNN(torch.nn.Module):
         self.gnns = torch.nn.ModuleList()
         for layer in range(num_layer):
             if gnn_type == "gin":
-                self.gnns.append(GINConv(emb_dim, aggr="add"))
+                self.gnns.append(GINConv(emb_dim_edge, no_edge_types=len(edge_type_dict), aggr="add"))
             elif gnn_type == "gcn":
-                self.gnns.append(GCNConv(emb_dim))
+                self.gnns.append(
+                    GCNConv(
+                        emb_dim_edge,
+                        no_edge_types=len(edge_type_dict),
+                    )
+                )
             elif gnn_type == "gat":
-                self.gnns.append(GATConv(emb_dim))
+                self.gnns.append(
+                    GATConv(
+                        emb_dim_edge,
+                        no_edge_types=len(edge_type_dict),
+                    )
+                )
             elif gnn_type == "graphsage":
-                self.gnns.append(GraphSAGEConv(emb_dim))
+                self.gnns.append(
+                    GraphSAGEConv(
+                        emb_dim_edge,
+                        no_edge_types=len(edge_type_dict),
+                    )
+                )
 
         self.batch_norms = torch.nn.ModuleList()
         for layer in range(num_layer):
-            self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim))
+            self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim_edge))
 
     def forward(self, *argv):
         if len(argv) == 3:
@@ -279,7 +304,7 @@ class GNN(torch.nn.Module):
 
         h_list = [x]
         for layer in range(self.num_layer):
-            h = self.gnns[layer](h_list[layer], edge_index, edge_attr)
+            h = self.gnns[layer](h_list[layer], edge_index, edge_attr, self.no_edge_types)
             h = self.batch_norms[layer](h)
             if layer == self.num_layer - 1:
                 # remove relu for the last layer
@@ -326,9 +351,10 @@ class GNN_pred(torch.nn.Module):
     def __init__(
         self,
         num_layer=2,
-        num_node_type=NUM_NODE_TYPE,
+        num_node_type=None,
         num_feat=38,
         emb_dim=256,
+        emb_dim_edge=256,
         num_additional_feat=0,
         num_node_tasks=15,
         num_graph_tasks=2,
@@ -337,10 +363,12 @@ class GNN_pred(torch.nn.Module):
         graph_pooling="mean",
         gnn_type="gin",
         return_node_embedding=False,
+        edge_types=None,
     ):
         super(GNN_pred, self).__init__()
         self.drop_ratio = drop_ratio
         self.emb_dim = emb_dim
+        self.emb_dim_edge = emb_dim_edge
         self.num_node_tasks = num_node_tasks
         self.num_graph_tasks = num_graph_tasks
         self.return_node_embedding = return_node_embedding
@@ -350,9 +378,11 @@ class GNN_pred(torch.nn.Module):
             num_node_type,
             num_feat,
             emb_dim,
+            emb_dim_edge,
             node_embedding_output=node_embedding_output,
             drop_ratio=drop_ratio,
             gnn_type=gnn_type,
+            edge_type_dict=edge_types,
         )
 
         # Different kind of graph pooling

@@ -2,6 +2,7 @@
 This file contains the classes for handling the experiments clustering, classification and
 the visualization of the results during and after the experiments.
 """
+import json
 import os
 import pickle
 import networkx as nx
@@ -16,14 +17,13 @@ from rtree import index
 import plotly.io as pio
 
 from .data import BoundaryDataLoader
-from .local_config import PROJECT_DIR
 from .graph_build import (
     calcualte_voronoi_from_coords,
     build_graph_from_cell_coords,
     assign_attributes,
     get_edge_type,
 )
-from .mlflow_client_ import read_run_result_ann_data
+from .mlflow_client_ import read_run_result_ann_data, read_run_attribute_clustering, MLFLOW_TRACKING_URI, MLFLOW_CLIENT
 from .plotly_helpers import (
     plotly_spatial_scatter_categorical,
     plotly_spatial_scatter_edges,
@@ -33,27 +33,37 @@ from .plotly_helpers import (
     plotly_umap_numerical,
 )
 
+from .logging_setup import logger
+
 sc.settings.verbosity = 3
 sc.settings.set_figure_params(dpi=120, facecolor="white")
 
 
 class spatialPipeline:
     def __init__(self, options):
-        # super().__init__()
-        self.dir_location = options["dir_loc"]
-        self.names_list = options["names_list"]
+        self.data_dir = options.get("data_dir")
+        self.slides_list = options.get("names_list")
+        self.cell_type_column = options.get("cell_type_column")
+        self.base_microns_for_edge_cutoff = options.get("base_microns_for_edge_cutoff")
+        self.data_options = options
+
+        if not self.slides_list and options.get("mlflow_config"):
+            logger.info("No slides list provided, reading slides list from mlflow config")
+            self.slides_list = read_run_attribute_clustering(**options["mlflow_config"], attribute_name="names_list")
         if options.get("mlflow_config"):
-            y_data_filter_name = options["mlflow_config"]["data_filter_name"]
-            y_resolution = options["mlflow_config"]["leiden_resolution"]
-            self.data = read_run_result_ann_data(y_data_filter_name, y_resolution)
+            self.data = read_run_result_ann_data(**options["mlflow_config"])
+            self.run_id = options["mlflow_config"]["run_id"]
         else:
             self.data = []
             self.read_data()
         self.segment_instances = {}
 
     def read_data(self):
-        for name in self.names_list:
-            vizgen_dir_ab = f"{self.dir_location}/data/{name}"
+        assert (
+            self.data_dir and self.slides_list
+        ), "Please provide the data_dir and samples list to build annData from the raw data"
+        for name in self.slides_list:
+            vizgen_dir_ab = f"{self.data_dir}/{name}"
             adata_ab = sq.read.vizgen(
                 path=vizgen_dir_ab,
                 counts_file="cell_by_gene.csv",
@@ -95,6 +105,7 @@ class spatialPipeline:
         n_segments = segment_config.get("segments_per_dimension", 20)
         z_index = segment_config.get("z_index", 0)
         padding_info = segment_config.get("padding", None)
+        dir_location = f"{self.data_dir}/{slide_name}"
 
         boundary_instance = BoundaryDataLoader(
             slide_name,
@@ -103,6 +114,7 @@ class spatialPipeline:
             n_segments=n_segments,
             z_index=z_index,
             padding=padding_info,
+            dir_location=dir_location,
         )
         boundary_arrays = boundary_instance.read_boundaries(self.data)
         self.segment_instances[(slide_name, x_range_index, y_range_index, n_segments)] = boundary_instance
@@ -145,6 +157,69 @@ class spatialPipeline:
         cell_data[bm_columns] = pd.DataFrame(self.data[cell_data["CELL_ID"], :].X.toarray())
 
         return cell_data, filtered_spatial_data
+
+    def build_network_edge_cutoffs(self, base_microns=5):
+        """
+        This function builds the edge cutoffs for the networkx graph from the base microns
+        Args:
+            base_microns (int): the base microns for the edge cutoffs, units in microns
+        """
+        file_names = [f"{self.data_dir}/{slice_item}/images/manifest.json" for slice_item in self.slides_list]
+
+        SLICE_PIXELS_EDGE_CUTOFF = {}
+
+        for file_name_index in range(len(file_names)):
+            # Load the JSON data from the file
+            with open(file_names[file_name_index], "r") as json_file:
+                data = json.load(json_file)
+
+            # Extract the microns_per_pixel value
+            microns_per_pixel = data["microns_per_pixel"]
+            SLICE_PIXELS_EDGE_CUTOFF[self.slides_list[file_name_index]] = base_microns / microns_per_pixel
+
+        SLICE_PIXELS_EDGE_CUTOFF = {key: int(value) for key, value in SLICE_PIXELS_EDGE_CUTOFF.items()}
+        self.slice_pixels_edge_cutoff = SLICE_PIXELS_EDGE_CUTOFF
+
+    def save_networkx_config_pretransform_and_data(
+        self,
+        pretransform_networkx_config,
+        segment_config,
+        network_features_config,
+        save_to="mlflow_run",
+        graph_folder_name="graph",
+    ):
+        if save_to == "mlflow_run":
+            if not self.run_id:
+                raise ValueError("Please provide the run_id to save the plots to mlflow run")
+            run_info = MLFLOW_CLIENT.get_run(self.run_id)
+            dataset_root = f"{MLFLOW_TRACKING_URI}{run_info.info.experiment_id}/{self.run_id}/artifacts"
+        else:
+            raise NotImplementedError("Not implemented saving config to local directory")
+
+        new_exp_folder = f"{dataset_root}/{self.data_options['unique_identifier']}"
+        os.makedirs(new_exp_folder, exist_ok=True)
+
+        boundary_name = str.lower(pretransform_networkx_config["boundary_type"])
+        edge_name = str.lower(pretransform_networkx_config["edge_config"]["type"])
+        no_segments_ = segment_config["segments_per_dimension"]
+        nx_graph_root = os.path.join(new_exp_folder, f"{graph_folder_name}/{boundary_name}_{edge_name}_{no_segments_}")
+        os.makedirs(nx_graph_root, exist_ok=True)
+
+        with open(f"{nx_graph_root}/pretransform_networkx_config.json", "w") as f:
+            json.dump(pretransform_networkx_config, f)
+        with open(f"{nx_graph_root}/networkx_build_config.json", "w") as f:
+            json.dump(self.data_options, f)
+        with open(f"{nx_graph_root}/networkx_feature_config.json", "w") as f:
+            json.dump(network_features_config, f)
+
+        cell_id_to_type = self.data.obs["cell_type"].to_dict()
+        cell_type_to_id = self.data.obs[["cell_type"]].reset_index().groupby("cell_type").index.agg(list)
+        cell_type_to_id = cell_type_to_id.to_dict()
+
+        with open(f"{nx_graph_root}/cell_id_to_type.json", "w") as f:
+            json.dump(cell_id_to_type, f)
+        with open(f"{nx_graph_root}/cell_type_to_id.json", "w") as f:
+            json.dump(cell_type_to_id, f)
 
     def build_networkx_for_region(self, segment_config, pretransform_networkx_config, network_features_config):
         segment_boundaries_given = self.read_boundary_arrays(segment_config)
@@ -193,7 +268,7 @@ class spatialPipeline:
             segment_data,
             segment_boundaries_given,
             node_to_cell_mapping,
-            pretransform_networkx_config["neighbor_edge_cutoff"],
+            segment_config["neighbor_edge_cutoff"],
             padding_dict,
         )
 
@@ -222,14 +297,17 @@ class spatialPipeline:
         G_segment,
         segment_config,
         pretransform_networkx_config,
+        color_dict,
         save_=False,
+        save_to="mlflow_run",
+        graph_folder_name="graph",
         cat_column="cell_type",
     ):
         plots_ = {}
+        given_boundaries = {
+            G_segment.nodes[n]["cell_id"]: G_segment.nodes[n]["boundary_polygon"] for n in G_segment.nodes
+        }
         if pretransform_networkx_config["edge_config"]["type"] == "Delaunay":
-            given_boundaries = {
-                G_segment.nodes[n]["cell_id"]: G_segment.nodes[n]["boundary_polygon"] for n in G_segment.nodes
-            }
             if self.segment_instances.get(
                 (
                     segment_config["sample_name"],
@@ -254,10 +332,14 @@ class spatialPipeline:
                 voronoi_boundaries = {
                     G_segment.nodes[n]["cell_id"]: G_segment.nodes[n]["voronoi_polygon"] for n in G_segment.nodes
                 }
-                vor_bound_fig = plotly_spatial_scatter_categorical(voronoi_boundaries, self.data.obs[cat_column])
+                vor_bound_fig = plotly_spatial_scatter_categorical(
+                    voronoi_boundaries, self.data.obs.loc[list(given_boundaries.keys())][cat_column], color_dict
+                )
                 plots_["boundary_voronoi"] = vor_bound_fig
 
-            given_bound_fig = plotly_spatial_scatter_categorical(given_boundaries, self.data.obs[cat_column])
+            given_bound_fig = plotly_spatial_scatter_categorical(
+                given_boundaries, self.data.obs.loc[list(given_boundaries.keys())][cat_column], color_dict
+            )
             plots_["boundary_given_fig"] = given_bound_fig
 
         if pretransform_networkx_config["edge_config"]["type"] == "R3Index":
@@ -265,14 +347,16 @@ class spatialPipeline:
                 rec_boundaries = {
                     G_segment.nodes[n]["cell_id"]: G_segment.nodes[n]["rectangle"] for n in G_segment.nodes
                 }
-                boundary_box_fig = plotly_spatial_scatter_categorical(rec_boundaries, self.data.obs[cat_column])
+                boundary_box_fig = plotly_spatial_scatter_categorical(
+                    rec_boundaries, self.data.obs.loc[list(given_boundaries.keys())][cat_column], color_dict
+                )
                 plots_["boundary_box"] = boundary_box_fig
             if pretransform_networkx_config["edge_config"]["bound_type"] == "rotated_rectangle":
                 rot_rec_boundaries = {
                     G_segment.nodes[n]["cell_id"]: G_segment.nodes[n]["rotated_rectangle"] for n in G_segment.nodes
                 }
                 boundary_box_rotated_fig = plotly_spatial_scatter_categorical(
-                    rot_rec_boundaries, self.data.obs[cat_column]
+                    rot_rec_boundaries, self.data.obs.loc[list(given_boundaries.keys())][cat_column], color_dict
                 )
                 plots_["boundary_box_rotated"] = boundary_box_rotated_fig
 
@@ -280,38 +364,71 @@ class spatialPipeline:
             f'edge_{str.lower(pretransform_networkx_config["edge_config"]["type"])}_{pretransform_networkx_config["edge_config"]["bound_type"]}'
         ] = plotly_spatial_scatter_edges(
             G_segment,
-            self.data.obs[cat_column],
+            self.data.obs.loc[list(given_boundaries.keys())][cat_column],
             edge_info=pretransform_networkx_config["edge_config"]["type"],
+            color_dict=color_dict,
         )
 
         if save_:
-            dataset_root = f"{PROJECT_DIR}/data/Liver12Slice12_leiden_res_0.7"
+            if save_to == "mlflow_run":
+                if not self.run_id:
+                    raise ValueError("Please provide the run_id to save the plots to mlflow run")
+                run_info = MLFLOW_CLIENT.get_run(self.run_id)
+                dataset_root = f"{MLFLOW_TRACKING_URI}{run_info.info.experiment_id}/{self.run_id}/artifacts"
+                dataset_root = os.path.join(dataset_root, f"{self.data_options['unique_identifier']}")
+                logger.debug(f"Saving to mlflow - {dataset_root}")
+            else:
+                dataset_root = f"{self.data_dir}/{'.'.join(self.slides_list)}_{self.cell_type_column}_base_microns_for_edge_cutoff_{self.base_microns_for_edge_cutoff}um"
+                dataset_root = str.lower(dataset_root)
+                logger.debug(f"Saving to {dataset_root}")
+
             boundary_name = str.lower(pretransform_networkx_config["boundary_type"])
             edge_name = str.lower(pretransform_networkx_config["edge_config"]["type"])
             no_segments_ = segment_config["segments_per_dimension"]
-            nx_graph_root = os.path.join(dataset_root, f"graph/{boundary_name}_{edge_name}_{no_segments_}")
+            nx_graph_root = os.path.join(
+                dataset_root, f"{graph_folder_name}/{boundary_name}_{edge_name}_{no_segments_}"
+            )
             os.makedirs(nx_graph_root, exist_ok=True)
 
-            nx_graph_name = os.path.join(
+            nx_graph_folder = os.path.join(
                 nx_graph_root,
+                "nx_files",
+            )
+            os.makedirs(nx_graph_folder, exist_ok=True)
+            nx_graph_name = os.path.join(
+                nx_graph_folder,
                 f"{segment_config['sample_name']}_{segment_config['region_id'][0]}_{segment_config['region_id'][1]}.gpkl",
+            )
+            color_dict_name = os.path.join(
+                nx_graph_root,
+                "color_dict.json",
             )
             with open(nx_graph_name, "wb") as f:
                 pickle.dump(G_segment, f)
+            with open(color_dict_name, "w") as f:
+                json.dump(color_dict, f)
 
-            fig_save_root = os.path.join(dataset_root, f"fig/{boundary_name}_{edge_name}_{no_segments_}")
-            os.makedirs(fig_save_root, exist_ok=True)
-
-            nx_fig_name = os.path.join(
+            fig_save_root = os.path.join(nx_graph_root, "figs")
+            nx_fig_html_name = os.path.join(
                 fig_save_root,
-                f"{segment_config['sample_name']}_{segment_config['region_id'][0]}_{segment_config['region_id'][1]}",
+                "html",
+            )
+            nx_fig_png_name = os.path.join(
+                fig_save_root,
+                "png",
+            )
+            os.makedirs(fig_save_root, exist_ok=True)
+            os.makedirs(nx_fig_html_name, exist_ok=True)
+            os.makedirs(nx_fig_png_name, exist_ok=True)
+            segment_name = (
+                f"{segment_config['sample_name']}_{segment_config['region_id'][0]}_{segment_config['region_id'][1]}"
             )
             for key, val in plots_.items():
-                val.write_html(f"{nx_fig_name}_{key}.html")
+                val.write_html(f"{nx_fig_html_name}/{segment_name}_{key}.html")
                 width_height = 1200
                 pio.write_image(
                     val,
-                    f"{nx_fig_name}_{key}.png",
+                    f"{nx_fig_png_name}/{segment_name}_{key}.png",
                     width=width_height,
                     height=width_height,
                 )

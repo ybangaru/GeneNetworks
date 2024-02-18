@@ -5,12 +5,11 @@ Helper functions for processing node/edge features
 import numpy as np
 import networkx as nx
 from scipy.stats import rankdata
-import warnings
 import torch
 import torch_geometric as tg
 
-from .experiment_config import EDGE_TYPES
 from .graph_build import extract_boundary_features
+from .logging_setup import logger
 
 
 def process_biomarker_expression(
@@ -210,7 +209,7 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
     # Edge features
     elif edge_ind is not None and node_ind is None:
         if feature_item == "edge_type":
-            v = [EDGE_TYPES[G.edges[edge_ind]["edge_type"]]]
+            v = [feature_kwargs["edge_types"][G.edges[edge_ind]["edge_type"]]]
             return v
         elif feature_item == "distance":
             v = process_edge_distance(G, edge_ind, **feature_kwargs)
@@ -233,8 +232,8 @@ def nx_to_tg_graph(
     node_features=[
         "cell_type",
         "biomarker_expression",
-        "neighborhood_composition",
         "center_coord",
+        "volume",
     ],
     edge_features=["edge_type", "distance"],
     **feature_kwargs
@@ -333,6 +332,6 @@ def get_feature_names(features, cell_type_mapping=None, biomarkers=None):
         elif feat == "boundary_polygon":
             feat_names.extend(["boundary_polygon-%s" % i for i in range(1, 8)])
         else:
-            warnings.warn("Using additional feature: %s" % feat)
+            logger.info("Using additional feature: %s" % feat)
             feat_names.append(feat)
     return feat_names

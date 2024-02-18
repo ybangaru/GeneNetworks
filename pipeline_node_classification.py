@@ -1,12 +1,9 @@
 import warnings
-import os
 import numpy as np
-import pandas as pd
 import torch.nn as nn
 from sklearn.model_selection import train_test_split
-
 import helpers
-from helpers import CellularGraphDataset, NO_JOBS, PROJECT_DIR, train_subgraph, logger
+from helpers import CellularGraphDataset, NO_JOBS, train_subgraph, logger, MLFLOW_TRACKING_URI
 
 warnings.filterwarnings("ignore")
 
@@ -30,10 +27,16 @@ def train_node_classification(dataset_kwargs):
         use_node_features = [
             x for x in dataset_kwargs["node_features"] if x not in dataset_kwargs["node_features_mask"]
         ]
+        if dataset_kwargs["center_node_features_mask"]:
+            use_center_node_features = [
+                x for x in use_node_features if x not in dataset_kwargs["center_node_features_mask"]
+            ]
         transformers.append(
             helpers.FeatureMask(
                 dataset,
-                use_center_node_features=use_node_features,
+                use_center_node_features=use_center_node_features
+                if dataset_kwargs["center_node_features_mask"]
+                else use_node_features,
                 use_neighbor_node_features=use_node_features,
                 use_edge_features=dataset.edge_feature_names,
             )
@@ -45,10 +48,12 @@ def train_node_classification(dataset_kwargs):
 
     model_kwargs = {
         "num_layer": dataset.subgraph_size,  # same number of layers as number of hops in the subgraphs
+        # +1 needed to assign the Unknown type during cell type masking transformation
         "num_node_type": len(dataset.cell_type_mapping) + 1,
         # number of embeddings for different cell types (plus one placeholder cell type)
         "num_feat": dataset[0].x.shape[1] - 1,  # exclude the cell type column
         "emb_dim": dataset_kwargs["node_embedding_size"],
+        "emb_dim_edge": dataset_kwargs["edge_embedding_size"],
         "num_node_tasks": len(
             dataset.cell_type_mapping
         ),  # A multi-class classification task: predicting center cell type
@@ -58,6 +63,7 @@ def train_node_classification(dataset_kwargs):
         "graph_pooling": "max",
         "gnn_type": dataset_kwargs["graph_type"],
         "return_node_embedding": False,
+        "edge_types": dataset_kwargs["edge_types"],
     }
 
     model = helpers.GNN_pred(**model_kwargs)
@@ -70,7 +76,7 @@ def train_node_classification(dataset_kwargs):
 
     train_kwargs = {
         "experiment_name": f'{dataset_kwargs["network_type"]}',
-        "run_name": f'{dataset_kwargs["graph_type"]}-emb_dim={model_kwargs["emb_dim"]}-subgraph_size={dataset_kwargs["subgraph_size"]}-subgraph_radius={dataset_kwargs["subgraph_radius_limit"]}-neighborhood_size={dataset_kwargs["neighborhood_size"]}',
+        "run_name": f'{dataset_kwargs["graph_type"]}-emb_dim={model_kwargs["emb_dim"]}-subgraph_size={dataset_kwargs["subgraph_size"]}-subgraph_radius={dataset_kwargs["subgraph_radius_limit"]}',
         "batch_size": BATCH_SIZE,  # No of subgraphs per batch
         "lr": learning_rate,
         "graph_loss_weight": 1.0,  # Weight of graph task loss relative to node task loss
@@ -126,20 +132,13 @@ def train_node_classification(dataset_kwargs):
 def build_train_kwargs(network_type, graph_type, kwargs):
     # TODO: subgraphs not using SUBGRAPH_RADIUS_LIMIT while plotting
 
-    pro_dir = kwargs["dir_loc"]
-    data_filter_name = kwargs["mlflow_config"]["data_filter_name"]
-    resolution = kwargs["mlflow_config"]["leiden_resolution"]
-
-    dataset_root = f"{pro_dir}/data/{data_filter_name}_leiden_res_{resolution}"
+    dataset_root = kwargs["mlflow_config"]["networkx_gpkl_root"]
 
     SUBGRAPH_SIZE = 3
-    SUBGRAPH_RADIUS_LIMIT = 184  # SLICE_PIXELS_EDGE_CUTOFF["Liver1Slice1"] * SUBGRAPH_SIZE
-    NEIGHBORHOOD_SIZE = 15  # 15 * SUBGRAPH_SIZE
+    SUBGRAPH_RADIUS_LIMIT = 184
+    # NEIGHBORHOOD_SIZE = 15  # 15 * SUBGRAPH_SIZE
     NODE_EMBEDDING_SIZE = 130
-
-    biomarkers_list = (
-        pd.read_csv(os.path.join(dataset_root, "biomarkers_list.csv"), header=None).values.flatten().tolist()
-    )
+    EDGE_EMBEDDING_SIZE = 130
 
     # TODO: test feature/layer normalization instead of batch normalization for training as shape features
     # features are resulting in overfitting and poor generalization
@@ -163,39 +162,45 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         "voronoi_polygon" if "voronoi" in network_type else "boundary_polygon",
     ]
     NODE_FEATURES_MASK = ["center_coord"]
+    CENTER_NODE_FEATURES_MASK = ["center_coord"]
     EDGE_FEATURES = ["edge_type", "distance"]  # edge_type must be first variable (cell pair) features "edge_type",
     EDGE_FEATURES_MASK = None
+    EDGE_TYPES = {
+        "neighbor": 0,
+        "distant": 1,
+        "self": 2,
+    }
 
     dataset_kwargs = {
+        "clustering_run_id": kwargs["mlflow_config"]["id"],
         "transform": [],
         "pre_transform": None,
         "dataset_root": dataset_root,
-        "dataset_filter": data_filter_name,
-        "leiden_cluster_res": resolution,
-        "raw_folder_name": f"graph/{network_type}",
-        "processed_folder_name": f"graph_processed_only_bio/{network_type}",
-        "biomarkers": biomarkers_list,  # biomarkers to be used in liver1slice1
-        # There are all the cellular features that we want the dataset to compute, cell_type must be the first variable
+        "raw_folder_name": "nx_files",
+        "processed_folder_name": "nx_files_processed",
         "network_type": network_type,
         "node_features": NODE_FEATURES,
         "node_features_mask": NODE_FEATURES_MASK,
+        "center_node_features_mask": CENTER_NODE_FEATURES_MASK,
         "edge_features": EDGE_FEATURES,
         "edge_features_mask": EDGE_FEATURES_MASK,
+        "edge_types": EDGE_TYPES,
         "graph_type": graph_type,
         "node_embedding_size": NODE_EMBEDDING_SIZE,
+        "edge_embedding_size": EDGE_EMBEDDING_SIZE,
         "subgraph_size": SUBGRAPH_SIZE,  # indicating we want to sample 3-hop subgraphs from these regions (for training/inference), this is a core parameter for SPACE-GM.
         "subgraph_source": "on-the-fly",
         "subgraph_allow_distant_edge": True,
         "subgraph_radius_limit": SUBGRAPH_RADIUS_LIMIT,
         "sampling_avoid_unassigned": True,
-        "unassigned_cell_type": "Unassigned",
+        # "unassigned_cell_type": "Unknown",
     }
 
     feature_kwargs = {
         # "biomarker_expression_process_method": "linear",
         # "biomarker_expression_lower_bound": 0,
         # "biomarker_expression_upper_bound": 18,
-        "neighborhood_size": NEIGHBORHOOD_SIZE,
+        # "neighborhood_size": NEIGHBORHOOD_SIZE,
     }
     dataset_kwargs.update(feature_kwargs)
 
@@ -205,22 +210,25 @@ def build_train_kwargs(network_type, graph_type, kwargs):
 def main():
     all_liver_samples = ["Liver1Slice1", "Liver1Slice2", "Liver2Slice1", "Liver2Slice2"]
     data_filter_name = "Liver12Slice12"
-    leiden_resolution = 0.7
 
-    data_options = {
-        "dir_loc": PROJECT_DIR,
-        "names_list": all_liver_samples,
-        "mlflow_config": {
-            "id": None,
-            "data_filter_name": data_filter_name,
-            "leiden_resolution": leiden_resolution,
-        },
-    }
+    CLUSTERING_EXP_ID = "834659805990264659"
+    CLUSTERING_RUN_ID = "c750f81070fa4ccbbd731b92746bebc6"
+    UNIQUE_IDENTIFIER = "subcluster-finetune"
+    GRAPH_FOLDER_NAME = "graph"
 
     SEGMENTS_PER_DIMENSION = 20
     chosen_network = "voronoi_delaunay"  # "given_delaunay", "given_r3index", "given_mst"
     graph_type = "gin"  # "gcn", "graphsage", "gat"
     network_type = f"{chosen_network}_{SEGMENTS_PER_DIMENSION}"
+
+    data_options = {
+        "names_list": all_liver_samples,
+        "mlflow_config": {
+            "id": CLUSTERING_RUN_ID,
+            "networkx_gpkl_root": f"{MLFLOW_TRACKING_URI}{CLUSTERING_EXP_ID}/{CLUSTERING_RUN_ID}/artifacts/{UNIQUE_IDENTIFIER}/{GRAPH_FOLDER_NAME}/{network_type}",
+            "data_filter_name": data_filter_name,
+        },
+    }
 
     try:
         dataset_kwargs = build_train_kwargs(network_type, graph_type, data_options)

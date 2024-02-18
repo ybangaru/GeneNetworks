@@ -2,7 +2,6 @@
 This file contains helper functions for building plots using Plotly.
 """
 import plotly.express as px
-from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 import pandas as pd
 import plotly.io as pio
@@ -29,7 +28,8 @@ COLORS_LIST = (
     # + px.colors.qualitative.D3
     + px.colors.qualitative.Set1
     + px.colors.qualitative.Set2
-    + px.colors.qualitative.Set3
+    # + px.colors.qualitative.Set3
+    + px.colors.qualitative.Pastel
 )
 
 
@@ -331,77 +331,6 @@ def plotly_umap_categorical(adata, chosen_key_value, color_key, from_annotations
     return fig
 
 
-def plotly_umap_categorical_old(adata, chosen_key_value, color_key, from_annotations):
-    fig = None
-
-    if from_annotations is True:
-        umap_coords = adata.obs[["UMAP_1", "UMAP_2"]].values
-        color_list = adata.obs[color_key]
-        if "all" in chosen_key_value:
-            plot_title = "UMAP source data, using known observations"
-        else:
-            plot_title = f"UMAP source data, using {chosen_key_value} observations"
-
-    else:
-        umap_coords = adata.obsm["X_umap"]
-        color_list = adata.obs[color_key].astype(str).replace("nan", "Unknown")
-        if "all" in chosen_key_value:
-            plot_title = "UMAPs constructed from known observations"
-        else:
-            plot_title = f"UMAP constructed using {chosen_key_value} observations"
-
-    # Get unique values of color_key
-    unique_colors = color_list.unique()
-
-    fig = make_subplots(
-        rows=1,
-        cols=1,
-        specs=[
-            [{"secondary_y": False}],
-        ],
-    )
-
-    # Get a list of discrete colors from Plotly
-    colors_from_plotly = px.colors.qualitative.Bold + px.colors.qualitative.Pastel + px.colors.qualitative.Vivid
-    # print(colors_from_plotly)
-    # colors_from_plotly = pc.DEFAULT_PLOTLY_COLORS
-    # Create a dictionary that maps each unique string to a color
-    color_dict = {}
-    for i, string in enumerate(unique_colors):
-        color_dict[string] = colors_from_plotly[i % len(colors_from_plotly)]
-
-    # Iterate over unique colors to create trace for each color
-    for color in unique_colors:
-        color_mask = color_list == color
-        fig.add_trace(
-            go.Scatter(
-                x=umap_coords[color_mask, 0],
-                y=umap_coords[color_mask, 1],
-                mode="markers",
-                marker_color=[color_dict[c] for c in color_list[color_mask]],
-                name=str(color),
-            )
-        )
-
-    x_label = "UMAP1"
-    y_label = "UMAP2"
-    fig.update_layout(
-        title=f"{plot_title}",
-        height=800,  # width=800,
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        legend={
-            "title": f"{color_key} categories",
-            "itemsizing": "constant",
-            "itemwidth": 30,
-        },
-        xaxis_showgrid=False,
-        yaxis_showgrid=False,
-    )
-    fig.update_traces(marker=dict(size=2.5))
-    return fig
-
-
 def plotly_umap_numerical(adata, chosen_key_value, color_key, from_annotations):
     fig = None
 
@@ -447,17 +376,20 @@ def plotly_umap_numerical(adata, chosen_key_value, color_key, from_annotations):
     return fig
 
 
-def plotly_spatial_scatter_categorical(test_boundaries, color_column):
+def plotly_spatial_scatter_categorical(test_boundaries, color_column, color_dict=None):
     fig = go.Figure()
 
     x_label = "X-position"
     y_label = "Y-position"
 
-    # Get unique values of color_key
-    unique_colors = sorted(color_column.unique())
-
-    unique_colors.sort()
-    color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
+    if color_dict is None:
+        # Get unique values of color_key
+        unique_colors = sorted(color_column.unique())
+        unique_colors.sort()
+        color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
+    else:
+        unique_colors = list(color_dict.keys())
+        unique_colors.sort()
 
     legend_boolen_set = set()
 
@@ -466,12 +398,8 @@ def plotly_spatial_scatter_categorical(test_boundaries, color_column):
         # for key, value in temp_boundaries.items():
         for key in temp_boundaries.index:
             try:
-                # x = value[0, :, 0]
-                # y = value[0, :, 1]
                 x = test_boundaries[key][:, 0]
                 y = test_boundaries[key][:, 1]
-                # x = value[:, 0]
-                # y = value[:, 1]
                 if color_column.loc[key] in legend_boolen_set:
                     fig.add_trace(
                         go.Scatter(
@@ -614,7 +542,7 @@ def plotly_spatial_scatter_umap(pipeline_instance, test_boundaries, component):
     return fig
 
 
-def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
+def plotly_spatial_scatter_edges(G, node_color_col, edge_info, color_dict=None):
     """Plot dot-line graph for the cellular graph using Plotly
 
     Args:
@@ -629,12 +557,15 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
     # Extract cell IDs of nodes for hover text
     node_cell_ids = [G.nodes[n]["cell_id"] for n in G.nodes]
 
-    # Get unique values of color_key
-    unique_colors = sorted(node_color_col.unique())
-
-    unique_colors.sort()
-    color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
-    color_dict["Unknown"] = COLORS_LIST[len(unique_colors)]
+    if not color_dict:
+        # Get unique values of color_key
+        unique_colors = sorted(node_color_col.unique())
+        unique_colors.sort()
+        color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
+        color_dict["Unknown"] = COLORS_LIST[len(unique_colors)]
+    else:
+        unique_colors = list(color_dict.keys())
+        unique_colors.sort()
 
     node_colors = []
     node_names = []
@@ -646,26 +577,6 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
         except KeyError:
             node_names.append("Unknown")
             node_colors.append(color_dict["Unknown"])
-
-    # Create edges for Plotly Scatter plot
-    edge_x = []
-    edge_y = []
-    edge_colors = []
-    edge_dashes = []
-    for i, j, edge_type in G.edges.data():
-        xi, yi = G.nodes[i]["center_coord"]
-        xj, yj = G.nodes[j]["center_coord"]
-
-        if edge_type["edge_type"] == "neighbor":
-            edge_x.extend([xi, xj, None])  # Add None to create a break in the line
-            edge_y.extend([yi, yj, None])
-            edge_colors.append("brown")
-            edge_dashes.append("solid")
-        else:
-            edge_x.extend([xi, xj, None])  # Add None to create a break in the line
-            edge_y.extend([yi, yj, None])
-            edge_colors.append("gold")
-            edge_dashes.append("dash")
 
     # Create a dictionary to store node traces for each cell type
     node_traces = {}
@@ -681,28 +592,46 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info):
                 color=color_dict[cell_type],
                 line=dict(width=0.5, color=color_dict[cell_type]),
             ),
-            # text=[name for i, name in enumerate(node_names) if mask[i]],
-            # hoverinfo="text",
             name=str(cell_type),  # Set the name for the legend entry
         )
         node_traces[cell_type] = cell_node_trace
 
-    # ind_neighbors = np.where(np.array(edge_colors) == "brown")[0]
-    # ind_distinct = np.where(np.array(edge_colors) == "gold")[0]
+    # Create edges for Plotly Scatter plot
+    edge_x_solid = []
+    edge_y_solid = []
+    edge_x_dash = []
+    edge_y_dash = []
+    for i, j, edge_type in G.edges.data():
+        xi, yi = G.nodes[i]["center_coord"]
+        xj, yj = G.nodes[j]["center_coord"]
 
-    # Create scatter plot for edges (lines)
-    edge_trace = go.Scatter(
-        x=edge_x,
-        y=edge_y,
+        if edge_type["edge_type"] == "neighbor":
+            edge_x_solid.extend([xi, xj, None])  # Add None to create a break in the line
+            edge_y_solid.extend([yi, yj, None])
+        else:
+            edge_x_dash.extend([xi, xj, None])  # Add None to create a break in the line
+            edge_y_dash.extend([yi, yj, None])
+
+    edge_solid_trace = go.Scatter(
+        x=edge_x_solid,
+        y=edge_y_solid,
         mode="lines",
-        line=dict(width=0.8, color="wheat"),  # edge_colors, dash=edge_dashes
-        hoverinfo="none",
-        name="Edges",
+        line=dict(width=0.8, color="white", dash="solid"),
+        name="Neighbor Edges",
+        showlegend=True,
+    )
+
+    edge_dash_trace = go.Scatter(
+        x=edge_x_dash,
+        y=edge_y_dash,
+        mode="lines",
+        line=dict(width=0.8, color="gold", dash="dash"),
+        name="Distant Edges",
         showlegend=True,
     )
 
     # Create the figure and add both traces
-    fig = go.Figure(data=list(node_traces.values()) + [edge_trace])
+    fig = go.Figure(data=list(node_traces.values()) + [edge_solid_trace, edge_dash_trace])
 
     # Set axis limits based on node coordinates
     x_min, x_max = node_coords[:, 0].min(), node_coords[:, 0].max()
@@ -833,32 +762,32 @@ def plotly_node_embeddings_3d(embeddings, labels, class_names, title="Node Embed
     return fig
 
 
-def build_subgraph_for_plotly(dataset, idx, center_ind):
-    # def plot_subgraph(self, idx, center_ind):
-    #     """Plot the n-hop subgraph around cell `center_ind` from region `idx`"""
-    xcoord_ind = dataset.node_feature_names.index("center_coord-x")
-    ycoord_ind = dataset.node_feature_names.index("center_coord-y")
+# def build_subgraph_for_plotly(dataset, idx, center_ind):
+#     # def plot_subgraph(self, idx, center_ind):
+#     #     """Plot the n-hop subgraph around cell `center_ind` from region `idx`"""
+#     xcoord_ind = dataset.node_feature_names.index("center_coord-x")
+#     ycoord_ind = dataset.node_feature_names.index("center_coord-y")
 
-    _subg = dataset.calculate_subgraph(idx, center_ind)
-    coords = _subg.x.data.numpy()[:, [xcoord_ind, ycoord_ind]].astype(float)
-    x_c, y_c = coords[_subg.center_node_index]
+#     _subg = dataset.calculate_subgraph(idx, center_ind, edge_types=None)
+#     coords = _subg.x.data.numpy()[:, [xcoord_ind, ycoord_ind]].astype(float)
+#     x_c, y_c = coords[_subg.center_node_index]
 
-    G = dataset.get_full_nx(idx)
-    sub_node_inds = []
-    for n in G.nodes:
-        c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
-        if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
-            sub_node_inds.append(n)
-    assert len(sub_node_inds) == len(coords)
-    _G = G.subgraph(sub_node_inds)
+#     G = dataset.get_full_nx(idx)
+#     sub_node_inds = []
+#     for n in G.nodes:
+#         c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
+#         if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
+#             sub_node_inds.append(n)
+#     assert len(sub_node_inds) == len(coords)
+#     _G = G.subgraph(sub_node_inds)
 
-    node_colors = {f"{_G.nodes[n]['cell_id']}": dataset.cell_type_mapping[_G.nodes[n]["cell_type"]] for n in _G.nodes}
-    test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
-    # color_column = pd.Series(node_colors, index=_G.nodes)
-    color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
-    color_column = color_column["leiden_res"]
+#     node_colors = {f"{_G.nodes[n]['cell_id']}": dataset.cell_type_mapping[_G.nodes[n]["cell_type"]] for n in _G.nodes}
+#     test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
+#     # color_column = pd.Series(node_colors, index=_G.nodes)
+#     color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
+#     color_column = color_column["leiden_res"]
 
-    return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
+#     return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
 
 
 if __name__ == "__main__":
