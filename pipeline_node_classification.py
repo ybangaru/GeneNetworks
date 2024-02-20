@@ -1,4 +1,5 @@
 import warnings
+import sys
 import json
 import numpy as np
 import torch.nn as nn
@@ -174,7 +175,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         "voronoi_polygon" if "voronoi" in network_type else "boundary_polygon",
     ]
     NODE_FEATURES_MASK = ["center_coord"]
-    CENTER_NODE_FEATURES_MASK = ["center_coord", "biomarker_expression"]
+    CENTER_NODE_FEATURES_MASK = ["center_coord"]
     EDGE_FEATURES = ["edge_type", "distance"]  # edge_type must be first variable (cell pair) features "edge_type",
     EDGE_FEATURES_MASK = None
     EDGE_TYPES = {
@@ -233,7 +234,7 @@ def main():
 
     SEGMENTS_PER_DIMENSION = 20
     chosen_network = "voronoi_delaunay"  # "given_delaunay", "given_r3index", "given_mst"
-    graph_type = "gin"  # "gcn", "graphsage", "gat"
+    graph_type = "graphsage"  # "gcn", "graphsage", "gat"
     network_type = f"{chosen_network}_{SEGMENTS_PER_DIMENSION}"
 
     data_options = {
@@ -251,6 +252,7 @@ def main():
     except Exception as e:
         logger.info(f"{network_type}-{graph_type} failed")
         logger.error(f"{str(e)}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
