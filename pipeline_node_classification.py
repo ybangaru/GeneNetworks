@@ -1,11 +1,14 @@
 import warnings
+import json
 import numpy as np
 import torch.nn as nn
 from sklearn.model_selection import train_test_split
 import helpers
-from helpers import CellularGraphDataset, NO_JOBS, train_subgraph, logger, MLFLOW_TRACKING_URI
+from helpers import CellularGraphDataset, NO_JOBS, train_subgraph, logger, MLFLOW_TRACKING_URI, MLFLOW_CLIENT
 
 warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", category=UserWarning, module="geopandas")
+warnings.filterwarnings("ignore", category=UserWarning, module="torch_geometric")
 
 
 def train_node_classification(dataset_kwargs):
@@ -134,6 +137,15 @@ def build_train_kwargs(network_type, graph_type, kwargs):
 
     dataset_root = kwargs["mlflow_config"]["networkx_gpkl_root"]
 
+    clustering_run_id = kwargs["mlflow_config"]["id"]
+    clustering_run_info = MLFLOW_CLIENT.get_run(clustering_run_id)
+    clustering_run_data = clustering_run_info.data
+
+    networkx_build_config_path = f"{dataset_root}/networkx_build_config.json"
+    with open(networkx_build_config_path, "r") as f:
+        json_data = json.load(f)
+        cell_annotation_key = json_data["cell_type_column"]
+
     SUBGRAPH_SIZE = 3
     SUBGRAPH_RADIUS_LIMIT = 184
     # NEIGHBORHOOD_SIZE = 15  # 15 * SUBGRAPH_SIZE
@@ -162,7 +174,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         "voronoi_polygon" if "voronoi" in network_type else "boundary_polygon",
     ]
     NODE_FEATURES_MASK = ["center_coord"]
-    CENTER_NODE_FEATURES_MASK = ["center_coord"]
+    CENTER_NODE_FEATURES_MASK = ["center_coord", "biomarker_expression"]
     EDGE_FEATURES = ["edge_type", "distance"]  # edge_type must be first variable (cell pair) features "edge_type",
     EDGE_FEATURES_MASK = None
     EDGE_TYPES = {
@@ -173,6 +185,9 @@ def build_train_kwargs(network_type, graph_type, kwargs):
 
     dataset_kwargs = {
         "clustering_run_id": kwargs["mlflow_config"]["id"],
+        "dataset_filter": kwargs["mlflow_config"]["data_filter_name"],
+        "leiden_annotation_column": cell_annotation_key,
+        "leiden_cluster_res": eval(clustering_run_data.params["leiden"])["resolution"],
         "transform": [],
         "pre_transform": None,
         "dataset_root": dataset_root,
