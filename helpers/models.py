@@ -17,7 +17,7 @@ from torch_geometric.nn import (
 import torch.nn.functional as F
 from torch_scatter import scatter_add
 from torch_geometric.nn.inits import glorot, zeros
-from helpers import logger
+from .logging_setup import logger
 
 
 class GINConv(MessagePassing):

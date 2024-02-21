@@ -38,6 +38,7 @@ from .mlflow_client_ import (
     read_run_annotation_mapping,
     read_run_embeddings_df,
     read_run_node_true_pred_labels,
+    load_node_classification_model,
 )
 from .training_eval_anime import (
     plotly_embeddings_anime,

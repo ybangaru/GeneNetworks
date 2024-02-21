@@ -2,6 +2,7 @@
 This module contains functions to build animation plots for continuous evaluation of training
 results.
 """
+import itertools
 import pandas as pd
 import numpy as np
 import plotly.express as px
@@ -19,6 +20,7 @@ from .mlflow_client_ import (
     read_run_attribute_classification,
 )
 from .plotly_helpers import COLORS_LIST
+from .logging_setup import logger
 
 
 def plotly_classification_report_anime(exp_id, run_id, dataset_type):
@@ -103,8 +105,8 @@ def plotly_embeddings_anime(experiment_id, run_id, spaces=["2d", "3d"], types=["
     color_dict_edge = dict(zip(edge_emb_reference.keys(), COLORS_LIST[: len(edge_emb_reference)]))
 
     dfs_exploded = {}
-    for item_ in types:
-        for space in spaces:
+    for item_, space in list(itertools.product(types, spaces)):
+        try:
             curr_cols = ["Number", "Dim0", "Dim1"]
             temp_arrays = (
                 np.repeat(dfs[item_]["Number"], dfs[item_]["Embedding"].apply(len)),
@@ -149,6 +151,8 @@ def plotly_embeddings_anime(experiment_id, run_id, spaces=["2d", "3d"], types=["
                 labels=label_col,
                 facet_col="hop_num" if item_ == "edges" else None,
             )
+        except Exception as e:
+            logger.error(f"Type - {item_}, Space - {space} - Error: {e}")
 
     return figs_
 
