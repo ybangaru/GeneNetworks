@@ -153,7 +153,7 @@ class spatialPipeline:
         cell_data = cell_data.rename(columns={"index": "CELL_ID"})
         cell_data["CELL_TYPE"] = self.data.obs["cell_type"][mask].to_list()
         cell_data["volume"] = self.data.obs["volume"][mask].to_list()
-        bm_columns = ("BM-" + self.data.var.index).tolist()  # [f"BM-{bm_temp}" for bm_temp in .to_list()]
+        bm_columns = ("BM-" + self.data.var.index).tolist()
         cell_data[bm_columns] = pd.DataFrame(self.data[cell_data["CELL_ID"], :].X.toarray())
 
         return cell_data, filtered_spatial_data
@@ -185,6 +185,7 @@ class spatialPipeline:
         pretransform_networkx_config,
         segment_config,
         network_features_config,
+        color_dict=None,
         save_to="mlflow_run",
         graph_folder_name="graph",
     ):
@@ -220,6 +221,8 @@ class spatialPipeline:
             json.dump(cell_id_to_type, f)
         with open(f"{nx_graph_root}/cell_type_to_id.json", "w") as f:
             json.dump(cell_type_to_id, f)
+        with open(f"{nx_graph_root}/color_dict.json", "w") as f:
+            json.dump(color_dict, f)
 
     def build_networkx_for_region(self, segment_config, pretransform_networkx_config, network_features_config):
         segment_boundaries_given = self.read_boundary_arrays(segment_config)
