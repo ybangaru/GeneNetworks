@@ -3,6 +3,7 @@ iframe_figures/
 logs/
 mlruns/
 assets/
+extensions_vsix/
 
 # failed experiments
 
