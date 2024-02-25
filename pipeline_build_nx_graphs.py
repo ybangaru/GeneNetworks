@@ -11,7 +11,7 @@ warnings.filterwarnings("ignore")
 
 CLUSTERING_RUN_ID = "c750f81070fa4ccbbd731b92746bebc6"
 UNIQUE_IDENTIFIER = "subcluster-finetune"
-GRAPH_FOLDER_NAME = "graph"
+GRAPH_FOLDER_NAME = "graph_self_edges"
 
 data_options = {
     "data_dir": DATA_DIR,
@@ -121,6 +121,7 @@ def parallel_function(segment_config, pretransform_networkx_config, network_feat
             pretransform_networkx_config,
             segment_config,
             network_features_config,
+            COLOR_DICT,
             save_to="mlflow_run",
             graph_folder_name=GRAPH_FOLDER_NAME,
         )
@@ -161,8 +162,6 @@ def main():
     # Create a multiprocessing Pool and execute the function in parallel
     with multiprocessing.Pool(processes=NO_JOBS) as pool:
         pool.starmap(parallel_function, func_args)
-    # test_index = 250 # 1357
-    # parallel_function(*func_args[test_index])
 
 
 if __name__ == "__main__":
