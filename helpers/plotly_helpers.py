@@ -23,101 +23,15 @@ sc.settings.set_figure_params(dpi=120, facecolor="white")
 
 COLORS_LIST = (
     px.colors.qualitative.Bold
-    + px.colors.qualitative.Dark24
+    + px.colors.qualitative.Light24
     # + px.colors.qualitative.Vivid
     # + px.colors.qualitative.D3
-    + px.colors.qualitative.Set1
-    + px.colors.qualitative.Set2
+    # + px.colors.qualitative.Set1
+    + px.colors.qualitative.Prism
     # + px.colors.qualitative.Set3
     + px.colors.qualitative.Pastel
+    + px.colors.qualitative.Plotly
 )
-
-
-def plotly_spatial_scatter_subgraph(test_boundaries, color_column, subgraph_edges=None):
-    fig = go.Figure()
-
-    x_label = "X-position"
-    y_label = "Y-position"
-
-    # Get unique values of color_key
-    unique_colors = sorted(color_column.unique())
-
-    unique_colors.sort()
-    color_dict = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
-    color_dict["Unknown"] = COLORS_LIST[len(unique_colors)]
-
-    legend_boolen_set = set()
-
-    for key, value in test_boundaries.items():
-        try:
-            x = value[:, 0]
-            y = value[:, 1]
-
-            if color_column.loc[key] in legend_boolen_set:
-                fig.add_trace(
-                    go.Scatter(
-                        x=x,
-                        y=y,
-                        fill="toself",
-                        mode="lines",
-                        line=dict(color=color_dict[color_column.loc[key]]),
-                        legendgroup=f"{color_column.loc[key]}",
-                        showlegend=False,
-                        name=f"{color_column.loc[key]}",
-                        text=f"{key}",
-                        hovertemplate="<b>%{text}</b>",
-                    ),
-                )
-            else:
-                legend_boolen_set.add(color_column.loc[key])
-                fig.add_trace(
-                    go.Scatter(
-                        x=x,
-                        y=y,
-                        fill="toself",
-                        mode="lines",
-                        line=dict(color=color_dict[color_column.loc[key]]),
-                        legendgroup=f"{color_column.loc[key]}",
-                        name=f"{color_column.loc[key]}",
-                        text=f"{key}",
-                        hovertemplate="<b>%{text}</b>",
-                    ),
-                )
-
-            # Add edges to the plot if subgraph_edges is provided
-            if subgraph_edges:
-                for edge in subgraph_edges:
-                    x_edge = [value[edge[0], 0], value[edge[1], 0]]
-                    y_edge = [value[edge[0], 1], value[edge[1], 1]]
-                    fig.add_trace(
-                        go.Scatter(
-                            x=x_edge,
-                            y=y_edge,
-                            mode="lines",
-                            line=dict(color="gray"),  # Adjust the edge color as needed
-                            showlegend=False,
-                            hoverinfo="none",
-                        ),
-                    )
-        except KeyError as e:
-            print(f"KeyError: {e}")
-            continue
-
-    # Set layout properties
-    fig.update_layout(
-        title=f"{color_column.name} representation",
-        xaxis_showgrid=False,
-        yaxis_showgrid=False,
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        height=800,
-        legend=dict(
-            itemsizing="constant",
-            title_font_family="Courier New",
-        ),
-    )
-
-    return fig
 
 
 def plotly_pca_categorical(
@@ -578,24 +492,6 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info, color_dict=None):
             node_names.append("Unknown")
             node_colors.append(color_dict["Unknown"])
 
-    # Create a dictionary to store node traces for each cell type
-    node_traces = {}
-
-    for cell_type in unique_colors:
-        mask = node_color_col.loc[node_cell_ids] == cell_type
-        cell_node_trace = go.Scatter(
-            x=node_coords[mask, 0],
-            y=node_coords[mask, 1],
-            mode="markers",
-            marker=dict(
-                size=8,
-                color=color_dict[cell_type],
-                line=dict(width=0.5, color=color_dict[cell_type]),
-            ),
-            name=str(cell_type),  # Set the name for the legend entry
-        )
-        node_traces[cell_type] = cell_node_trace
-
     # Create edges for Plotly Scatter plot
     edge_x_solid = []
     edge_y_solid = []
@@ -630,8 +526,27 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info, color_dict=None):
         showlegend=True,
     )
 
+    # Create a dictionary to store node traces for each cell type
+    node_traces = {}
+
+    for cell_type in unique_colors:
+        mask = node_color_col.loc[node_cell_ids] == cell_type
+        cell_node_trace = go.Scatter(
+            x=node_coords[mask, 0],
+            y=node_coords[mask, 1],
+            mode="markers",
+            marker=dict(
+                size=8,
+                color=color_dict[cell_type],
+                line=dict(width=0.5, color=color_dict[cell_type]),
+            ),
+            name=str(cell_type),  # Set the name for the legend entry
+        )
+        node_traces[cell_type] = cell_node_trace
+
     # Create the figure and add both traces
-    fig = go.Figure(data=list(node_traces.values()) + [edge_solid_trace, edge_dash_trace])
+    fig = go.Figure(data=list(node_traces.values()))
+    fig.add_traces([edge_solid_trace, edge_dash_trace])
 
     # Set axis limits based on node coordinates
     x_min, x_max = node_coords[:, 0].min(), node_coords[:, 0].max()
@@ -657,6 +572,107 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info, color_dict=None):
         hovermode="closest",
         showlegend=True,
         height=800,
+    )
+
+    return fig
+
+
+def plotly_spatial_scatter_subgraph(df, subgraph_edges=None):
+    fig = go.Figure()
+
+    x_label = "X-position"
+    y_label = "Y-position"
+
+    legend_boolen_set = set()
+    for key, value in df.iterrows():
+        try:
+            x = value["boundary"][:, 0]
+            y = value["boundary"][:, 1]
+            if value["cell_type"] in legend_boolen_set:
+                fig.add_trace(
+                    go.Scatter(
+                        x=x,
+                        y=y,
+                        fill="toself",
+                        mode="lines",
+                        line=dict(color=value["cell_color"]),
+                        legendgroup=f"{value['cell_type']}",
+                        showlegend=False,
+                        name=f"{value['cell_type']}",
+                        text=f"{value['cell_id']} - {value['cell_type']}",
+                        hovertemplate="<b>%{text}</b>",
+                    ),
+                )
+            else:
+                legend_boolen_set.add(value["cell_type"])
+                fig.add_trace(
+                    go.Scatter(
+                        x=x,
+                        y=y,
+                        fill="toself",
+                        mode="lines",
+                        line=dict(color=value["cell_color"]),
+                        legendgroup=f"{value['cell_type']}",
+                        name=f"{value['cell_type']}",
+                        text=f"{value['cell_id']} - {value['cell_type']}",
+                        hovertemplate="<b>%{text}</b>",
+                    ),
+                )
+        except KeyError as e:
+            logger.info(f"KeyError: {e}")
+            continue
+
+    # Add edges to the plot if subgraph_edges is provided
+    if subgraph_edges is not None:
+        edge_types_design = {
+            "neighbor": "solid",
+            "distant": "dash",
+            "self": "dot",
+        }
+        edge_types_color = {
+            "neighbor": "white",
+            "distant": "gold",
+            "self": "gray",
+        }
+        for design_type in edge_types_design:
+            filtered_edges = subgraph_edges[subgraph_edges["edge_type"] == design_type]
+            # Extract coordinates from the DataFrame using vectorized operations
+            if not filtered_edges.empty:
+                for other_edge in list(filtered_edges["edge_type"].unique()):
+                    filtered_x_edges = []
+                    filtered_y_edges = []
+                    other_edge_df = filtered_edges[filtered_edges["edge_type"] == other_edge]
+
+                    for indx, row in other_edge_df.iterrows():
+                        xi, yi = row["from_loc"]
+                        xj, yj = row["to_loc"]
+                        filtered_x_edges.extend([xi, xj, None])
+                        filtered_y_edges.extend([yi, yj, None])
+
+                    edge_trace = go.Scatter(
+                        x=filtered_x_edges,
+                        y=filtered_y_edges,
+                        mode="lines",
+                        line=dict(width=0.6, color=edge_types_color[design_type], dash=edge_types_design[design_type]),
+                        name=f"{design_type} edges",
+                        showlegend=True,
+                        opacity=0.8,
+                    )
+                    fig.add_trace(edge_trace)
+
+    # Set layout properties
+    fig.update_layout(
+        title="cell type representation",
+        xaxis_showgrid=False,
+        yaxis_showgrid=False,
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        height=600,
+        # width=500,
+        legend=dict(
+            itemsizing="constant",
+            title_font_family="Courier New",
+        ),
     )
 
     return fig
@@ -760,34 +776,6 @@ def plotly_node_embeddings_3d(embeddings, labels, class_names, title="Node Embed
     )
 
     return fig
-
-
-# def build_subgraph_for_plotly(dataset, idx, center_ind):
-#     # def plot_subgraph(self, idx, center_ind):
-#     #     """Plot the n-hop subgraph around cell `center_ind` from region `idx`"""
-#     xcoord_ind = dataset.node_feature_names.index("center_coord-x")
-#     ycoord_ind = dataset.node_feature_names.index("center_coord-y")
-
-#     _subg = dataset.calculate_subgraph(idx, center_ind, edge_types=None)
-#     coords = _subg.x.data.numpy()[:, [xcoord_ind, ycoord_ind]].astype(float)
-#     x_c, y_c = coords[_subg.center_node_index]
-
-#     G = dataset.get_full_nx(idx)
-#     sub_node_inds = []
-#     for n in G.nodes:
-#         c = np.array(G.nodes[n]["center_coord"]).astype(float).reshape((1, -1))
-#         if np.linalg.norm(coords - c, ord=2, axis=1).min() < 1e-2:
-#             sub_node_inds.append(n)
-#     assert len(sub_node_inds) == len(coords)
-#     _G = G.subgraph(sub_node_inds)
-
-#     node_colors = {f"{_G.nodes[n]['cell_id']}": dataset.cell_type_mapping[_G.nodes[n]["cell_type"]] for n in _G.nodes}
-#     test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
-#     # color_column = pd.Series(node_colors, index=_G.nodes)
-#     color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
-#     color_column = color_column["leiden_res"]
-
-#     return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
 
 
 if __name__ == "__main__":
