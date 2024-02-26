@@ -635,8 +635,6 @@ def get_edge_type(G, neighbor_edge_cutoff):
     Args:
         G (nx.Graph): full cellular graph of the region
         neighbor_edge_cutoff (float): distance cutoff for neighbor edges.
-        # TODO: no more defaults
-            # By default we use 55 pixels (~20 um)
 
     Returns:
         dict: edge properties
@@ -645,11 +643,15 @@ def get_edge_type(G, neighbor_edge_cutoff):
     for i, j in G.edges:
         ci = G.nodes[i]["center_coord"]
         cj = G.nodes[j]["center_coord"]
-        dist = np.linalg.norm(np.array(ci) - np.array(cj), ord=2)
-        edge_properties[(i, j)] = {
-            "distance": dist,
-            "edge_type": "neighbor" if dist < neighbor_edge_cutoff else "distant",
-        }
+        if G.nodes[i]["cell_id"] == G.nodes[j]["cell_id"]:
+            dist = 0
+            edge_properties[(i, j)] = {"distance": dist, "edge_type": "self"}
+        else:
+            dist = np.linalg.norm(np.array(ci) - np.array(cj), ord=2)
+            edge_properties[(i, j)] = {
+                "distance": dist,
+                "edge_type": "neighbor" if dist < neighbor_edge_cutoff else "distant",
+            }
     return edge_properties
 
 

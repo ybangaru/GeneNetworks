@@ -193,9 +193,6 @@ def process_feature(G, feature_item, node_ind=None, edge_ind=None, **feature_kwa
         elif feature_item == "voronoi_polygon" or feature_item == "boundary_polygon":
             v = extract_boundary_features(G.nodes[node_ind][feature_item])
             return v
-        elif feature_item == "cell_type_revealed":
-            v = [feature_kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
-            return v
         elif feature_item in G.nodes[node_ind]:
             # Additional features specified by users, e.g. "volume" in the example
             v = [G.nodes[node_ind][feature_item]]
@@ -266,13 +263,14 @@ def nx_to_tg_graph(
         assert np.all(sub_G.nodes == np.arange(len(sub_G)))
 
         # Append node and edge features to the pyg data object
-        data = {"x": [], "edge_attr": [], "edge_index": [], "is_padding": []}
+        data = {"x": [], "edge_attr": [], "edge_index": [], "is_padding": [], "cell_id": []}
         for node_ind in sub_G.nodes:
             feat_val = []
             for key in node_features:
                 feat_val.extend(process_feature(sub_G, key, node_ind=node_ind, **feature_kwargs))
             data["x"].append(feat_val)
             data["is_padding"].append(sub_G.nodes[node_ind]["is_padding"])
+            data["cell_id"].append(sub_G.nodes[node_ind]["cell_id"])
 
         for edge_ind in sub_G.edges:
             feat_val = []
@@ -284,7 +282,8 @@ def nx_to_tg_graph(
             data["edge_index"].append(tuple(reversed(edge_ind)))
 
         for key, item in data.items():
-            data[key] = torch.tensor(item)
+            if key != "cell_id":
+                data[key] = torch.tensor(item)
         data["edge_index"] = data["edge_index"].t().long()
         data = tg.data.Data.from_dict(data)
         data.num_nodes = sub_G.number_of_nodes()
