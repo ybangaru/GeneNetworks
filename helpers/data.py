@@ -57,6 +57,7 @@ class CellularGraphDataset(Dataset):
         cell_type_freq=None,
         biomarkers=None,
         subgraph_size=0,
+        subgraph_node_type="all-types",
         subgraph_source="on-the-fly",
         subgraph_allow_distant_edge=True,
         subgraph_radius_limit=-1,
@@ -147,6 +148,8 @@ class CellularGraphDataset(Dataset):
         self.transform = transform
 
         # Using n-hop ego graphs (subgraphs) to perform prediction
+        assert subgraph_node_type in ["all-types", "cc-types"], "Invalid subgraph node selection choice"
+        self.subgraph_node_type = subgraph_node_type
         self.subgraph_size = subgraph_size  # number of hops, 0 = use full graph
         self.subgraph_source = subgraph_source
         self.subgraph_allow_distant_edge = subgraph_allow_distant_edge
@@ -345,10 +348,19 @@ class CellularGraphDataset(Dataset):
         else:
             edge_type_mask = None
 
+        if self.subgraph_node_type == "cc-types":
+            node_type = int(data.x[int(center_ind), 0])
+            node_attributes = data.x
+        else:
+            node_type = None
+            node_attributes = None
+
         sub_node_inds = k_hop_subgraph(
             int(center_ind),
             self.subgraph_size,
             data.edge_index,
+            node_attr=node_attributes,
+            node_type=node_type,
             edge_type_mask=edge_type_mask,
             relabel_nodes=False,
             num_nodes=data.x.shape[0],
@@ -589,6 +601,8 @@ def k_hop_subgraph(
     node_ind,
     subgraph_size,
     edge_index,
+    node_attr=None,
+    node_type=None,
     edge_type_mask=None,
     relabel_nodes=False,
     num_nodes=None,
@@ -616,6 +630,15 @@ def k_hop_subgraph(
     node_mask = row.new_empty(num_nodes, dtype=torch.bool)
     edge_mask = row.new_empty(row.size(0), dtype=torch.bool)
     edge_type_mask = torch.ones_like(edge_mask) if edge_type_mask is None else edge_type_mask
+    # filtering all edges that are not the same cell type as the center cell if node_type is not None
+    node_type_mask = (
+        torch.ones_like(edge_mask)
+        if node_type is None
+        else (
+            torch.index_select(node_attr[:, 0] == node_type, 0, row)
+            * torch.index_select(node_attr[:, 0] == node_type, 0, col)
+        )
+    )
 
     if isinstance(node_ind, (int, list, tuple)):
         node_ind = torch.tensor([node_ind], device=row.device).flatten()
@@ -629,8 +652,8 @@ def k_hop_subgraph(
         node_mask.fill_(False)
         node_mask[next_root] = True
         torch.index_select(node_mask, 0, row, out=edge_mask)
-        subsets.append(col[edge_mask])
-        next_root = col[edge_mask * edge_type_mask]  # use nodes connected with mask=True to span
+        subsets.append(col[edge_mask * edge_type_mask * node_type_mask])
+        next_root = col[edge_mask * edge_type_mask * node_type_mask]
 
     subset, inv = torch.cat(subsets).unique(return_inverse=True)
     inv = inv[: node_ind.numel()]
