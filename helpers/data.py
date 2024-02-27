@@ -8,8 +8,7 @@ import os
 import json
 import pickle
 import numpy as np
-
-# import pandas as pd
+import pandas as pd
 import multiprocessing
 import matplotlib
 import matplotlib.pyplot as plt
@@ -27,7 +26,7 @@ from joblib.externals.loky.backend.context import get_context
 from .features import get_feature_names, nx_to_tg_graph
 from .graph_build import plot_graph
 from .logging_setup import logger
-
+from .plotly_helpers import plotly_spatial_scatter_subgraph
 from .utils import (
     get_cell_type_metadata,
     get_biomarker_metadata,
@@ -58,6 +57,7 @@ class CellularGraphDataset(Dataset):
         cell_type_freq=None,
         biomarkers=None,
         subgraph_size=0,
+        subgraph_node_type="all-types",
         subgraph_source="on-the-fly",
         subgraph_allow_distant_edge=True,
         subgraph_radius_limit=-1,
@@ -103,6 +103,8 @@ class CellularGraphDataset(Dataset):
             self.cell_type_mapping = cell_type_mapping
             self.cell_type_freq = cell_type_freq
 
+        self.cell_type_inv_mapping = {v: k for k, v in self.cell_type_mapping.items()}
+
         # Find all available biomarkers for cells in the dataset
         if biomarkers is None:
             nx_graph_files = [os.path.join(self.raw_dir, f) for f in self.raw_file_names]
@@ -114,6 +116,8 @@ class CellularGraphDataset(Dataset):
         self.node_features = node_features
         self.edge_features = edge_features
         self.edge_types = edge_types
+        self.edge_types_inv = {v: k for k, v in self.edge_types.items()}
+
         if "cell_type" in self.node_features:
             assert self.node_features.index("cell_type") == 0, "cell_type must be the first node feature"
         if "edge_type" in self.edge_features:
@@ -144,10 +148,22 @@ class CellularGraphDataset(Dataset):
         self.transform = transform
 
         # Using n-hop ego graphs (subgraphs) to perform prediction
+        assert subgraph_node_type in ["all-types", "cc-types"], "Invalid subgraph node selection choice"
+        self.subgraph_node_type = subgraph_node_type
         self.subgraph_size = subgraph_size  # number of hops, 0 = use full graph
         self.subgraph_source = subgraph_source
         self.subgraph_allow_distant_edge = subgraph_allow_distant_edge
         self.subgraph_radius_limit = subgraph_radius_limit
+
+        # sort for consistency between reads
+        self.processed_paths.sort()
+        assert len(self.processed_paths) == len(
+            self.raw_paths
+        ), "Processed and raw paths are not consistent, update processed_region_to_raw to handle this case"
+
+        # create mapper for processed to raw paths
+        self.processed_region_to_raw = {}
+        self.update_processed_region_to_raw()
 
         # Cache for graphs
         self.cached_data = {}
@@ -159,6 +175,16 @@ class CellularGraphDataset(Dataset):
             self.cell_type_mapping[ct]: 1.0 / (self.cell_type_freq[ct] + 1e-5) for ct in self.cell_type_mapping
         }
         self.sampling_freq = torch.from_numpy(np.array([self.sampling_freq[i] for i in range(len(self.sampling_freq))]))
+
+    def update_processed_region_to_raw(self):
+        """This mapper helps to go back and forth between raw and processed paths"""
+
+        for item in self.processed_paths:
+            p_key = os.path.basename(item).split(".")[0]
+            temp = f"{os.path.basename(item).split('.')[0]}.gpkl"
+            temp = temp.replace("-", "_")
+            p_val = os.path.join(self.raw_dir, temp)
+            self.processed_region_to_raw[p_key] = p_val
 
     def set_indices(self, inds=None):
         """Limit subgraph sampling to a subset of region indices,
@@ -269,6 +295,18 @@ class CellularGraphDataset(Dataset):
             data = self.get_subgraph(idx, center_ind)
         return data
 
+    def get_subgraphs_list(self, idx, size=10):
+        """Get a list of subgraphs from the dataset"""
+        data = self.get_full(idx)
+        subgraph_center_inds = []
+        if self.subgraph_size > 0:
+            for i in range(size):
+                center_ind = self.pick_center(data)
+                subgraph_center_inds.append(center_ind)
+
+        subgraphs = [self.get_subgraph(idx, i) for i in subgraph_center_inds]
+        return subgraphs
+
     def get_subgraph(self, idx, center_ind):
         """Get a subgraph from the dataset"""
         # Check cache
@@ -293,6 +331,8 @@ class CellularGraphDataset(Dataset):
 
     def get_full_nx(self, idx):
         """Read the full cellular graph (nx.Graph) of region `idx`"""
+        if type(idx) is str:
+            return pickle.load(open(self.processed_region_to_raw[idx], "rb"))
         return pickle.load(open(self.raw_paths[idx], "rb"))
 
     def calculate_subgraph(self, idx, center_ind, return_node_indices=False):
@@ -307,10 +347,20 @@ class CellularGraphDataset(Dataset):
             edge_type_mask = data.edge_attr[:, 0] == self.edge_types["neighbor"]
         else:
             edge_type_mask = None
+
+        if self.subgraph_node_type == "cc-types":
+            node_type = int(data.x[int(center_ind), 0])
+            node_attributes = data.x
+        else:
+            node_type = None
+            node_attributes = None
+
         sub_node_inds = k_hop_subgraph(
             int(center_ind),
             self.subgraph_size,
             data.edge_index,
+            node_attr=node_attributes,
+            node_type=node_type,
             edge_type_mask=edge_type_mask,
             relabel_nodes=False,
             num_nodes=data.x.shape[0],
@@ -328,6 +378,8 @@ class CellularGraphDataset(Dataset):
 
         # Construct subgraphs as separate pyg data objects
         sub_x = data.x[sub_node_inds]
+        sub_cell_ids = [data.cell_id[int(item)] for item in sub_node_inds]
+        padding_bool_list = data["is_padding"][sub_node_inds]
         sub_edge_index, sub_edge_attr = subgraph(
             sub_node_inds, data.edge_index, edge_attr=data.edge_attr, relabel_nodes=True
         )
@@ -338,18 +390,17 @@ class CellularGraphDataset(Dataset):
             "center_node_index": relabeled_node_ind,  # center node index in the subgraph
             "original_center_node": center_ind,  # center node index in the original full cellular graph
             "x": sub_x,
+            "cell_id": sub_cell_ids,
             "edge_index": sub_edge_index,
             "edge_attr": sub_edge_attr,
             "num_nodes": len(sub_node_inds),
+            "is_padding": padding_bool_list,
         }
 
         # Assign graph-level attributes
         for k in data:
             if not k[0] in sub_data:
-                if k[0] == "is_padding":
-                    sub_data[k[0]] = data["is_padding"][sub_node_inds]
-                else:
-                    sub_data[k[0]] = k[1]
+                sub_data[k[0]] = k[1]
 
         sub_data = tg.data.Data.from_dict(sub_data)
         self.cached_data[(idx, center_ind)] = sub_data
@@ -376,7 +427,7 @@ class CellularGraphDataset(Dataset):
 
     def pick_center(self, data):
         """Randomly pick a center cell from a full cellular graph, cell type balanced"""
-        # cell_types = data["x"][:, 0].long()
+
         cell_types = data["x"][data["is_padding"] == False][:, 0].long()  # noqa: E712
         freq = self.sampling_freq.gather(0, cell_types)
         freq = freq / freq.sum()
@@ -462,33 +513,78 @@ class CellularGraphDataset(Dataset):
 
         return buffer
 
-    # TODO: implement plotly version of the subgraph plot
-    # def build_subgraph_plotly(self, idx, center_ind):
-    #     data = self.get_full(idx)
-    #     # if not self.subgraph_allow_distant_edge:
-    #     #     edge_type_mask = (data.edge_attr[:, 0] == EDGE_TYPES["neighbor"])
-    #     # else:
-    #     edge_type_mask = None
-    #     sub_node_inds = k_hop_subgraph(
-    #         int(center_ind),
-    #         self.subgraph_size,
-    #         data.edge_index,
-    #         edge_type_mask=edge_type_mask,
-    #         relabel_nodes=False,
-    #         num_nodes=data.x.shape[0],
-    #     )[0]
+    def plotly_subgraphs_list(self, idx, filter_self_edges=True, size=10):
+        """Plot a list of subgraphs from the dataset"""
+        data = self.get_full(idx)
+        subgraph_center_inds = []
+        if self.subgraph_size > 0:
+            for i in range(size):
+                center_ind = self.pick_center(data)
+                subgraph_center_inds.append(center_ind)
 
-    #     G = self.get_full_nx(idx)
-    #     _G = G.subgraph(np.array(sub_node_inds))
+        plots_ = []
+        for center_ind in subgraph_center_inds:
+            plots_.append(self.plotly_subgraph(idx, center_ind, filter_self_edges=filter_self_edges))
 
-    #     node_colors = {f"{_G.nodes[n]['cell_id']}": self.cell_[_G.nodes[n]["cell_type"]] for n in _G.nodes}
-    #     test_boundaries = {f"{_G.nodes[n]['cell_id']}": _G.nodes[n]["voronoi_polygon"] for n in _G.nodes}
-    #     # color_column = pd.Series(node_colors, index=_G.nodes)
-    #     color_column = pd.DataFrame.from_dict(node_colors, orient="index", columns=["leiden_res"])
-    #     color_column = color_column["leiden_res"]
-    #     color_column = color_column.astype(str).map(ANNOTATION_DICT)
+        return plots_
 
-    #     return plotly_spatial_scatter_subgraph(test_boundaries, color_column)
+    def plotly_subgraph(self, idx, center_ind, filter_self_edges=True):
+        xcoord_ind = self.node_feature_names.index("center_coord-x")
+        ycoord_ind = self.node_feature_names.index("center_coord-y")
+        boundary_feat = "voronoi_polygon" if "voronoi_polygon" in self.node_features else "boundary_polygon"
+        edge_type_index = self.edge_feature_names.index("edge_type")
+
+        _subg = self.calculate_subgraph(idx, center_ind)
+        if torch.all(_subg["is_padding"]):
+            logger.error("all cells are from padding area in this graph segment")
+            return
+
+        vectorized_mapping = np.vectorize(self.cell_type_inv_mapping.get)
+        cell_types_subgraph = vectorized_mapping(_subg.x[:, 0].numpy())
+        _subg["cell_types"] = cell_types_subgraph
+        _subg["cell_colors"] = [self.cell_type_color[ct] for ct in cell_types_subgraph]
+
+        G = self.get_full_nx(_subg.region_id)
+        node_ids_to_find = _subg.cell_id
+        cell_boundaries = [
+            data[boundary_feat] for node, data in G.nodes(data=True) if data["cell_id"] in node_ids_to_find
+        ]
+
+        edge_types_list = _subg.edge_attr[:, edge_type_index].numpy().astype(int)
+        _subg["edge_types"] = [self.edge_types_inv[et] for et in edge_types_list]
+
+        data_df = pd.DataFrame(
+            {
+                "cell_type": _subg["cell_types"],
+                "cell_color": _subg["cell_colors"],
+                "x": _subg.x[:, xcoord_ind].numpy(),
+                "y": _subg.x[:, ycoord_ind].numpy(),
+                "cell_id": _subg.cell_id,
+                "boundary": cell_boundaries,
+            }
+        )
+
+        edges_df = pd.DataFrame(_subg.edge_index.numpy().T, columns=["source", "target"])
+        edges_df["edge_type"] = _subg["edge_types"]
+        edges_df["source_cell_id"] = edges_df["source"].map(data_df["cell_id"].to_dict())
+        edges_df["target_cell_id"] = edges_df["target"].map(data_df["cell_id"].to_dict())
+        edges_df["from_loc"] = list(
+            zip(
+                edges_df["source_cell_id"].map(data_df.set_index("cell_id")["x"]),
+                edges_df["source_cell_id"].map(data_df.set_index("cell_id")["y"]),
+            )
+        )
+        edges_df["to_loc"] = list(
+            zip(
+                edges_df["target_cell_id"].map(data_df.set_index("cell_id")["x"]),
+                edges_df["target_cell_id"].map(data_df.set_index("cell_id")["y"]),
+            )
+        )
+
+        if filter_self_edges:
+            edges_df = edges_df[edges_df["edge_type"] != "self"]
+
+        return plotly_spatial_scatter_subgraph(data_df, subgraph_edges=edges_df)
 
     def plot_graph_legend(self):
         """Legend for cell type colors"""
@@ -505,6 +601,8 @@ def k_hop_subgraph(
     node_ind,
     subgraph_size,
     edge_index,
+    node_attr=None,
+    node_type=None,
     edge_type_mask=None,
     relabel_nodes=False,
     num_nodes=None,
@@ -532,6 +630,15 @@ def k_hop_subgraph(
     node_mask = row.new_empty(num_nodes, dtype=torch.bool)
     edge_mask = row.new_empty(row.size(0), dtype=torch.bool)
     edge_type_mask = torch.ones_like(edge_mask) if edge_type_mask is None else edge_type_mask
+    # filtering all edges that are not the same cell type as the center cell if node_type is not None
+    node_type_mask = (
+        torch.ones_like(edge_mask)
+        if node_type is None
+        else (
+            torch.index_select(node_attr[:, 0] == node_type, 0, row)
+            * torch.index_select(node_attr[:, 0] == node_type, 0, col)
+        )
+    )
 
     if isinstance(node_ind, (int, list, tuple)):
         node_ind = torch.tensor([node_ind], device=row.device).flatten()
@@ -545,8 +652,8 @@ def k_hop_subgraph(
         node_mask.fill_(False)
         node_mask[next_root] = True
         torch.index_select(node_mask, 0, row, out=edge_mask)
-        subsets.append(col[edge_mask])
-        next_root = col[edge_mask * edge_type_mask]  # use nodes connected with mask=True to span
+        subsets.append(col[edge_mask * edge_type_mask * node_type_mask])
+        next_root = col[edge_mask * edge_type_mask * node_type_mask]
 
     subset, inv = torch.cat(subsets).unique(return_inverse=True)
     inv = inv[: node_ind.numel()]

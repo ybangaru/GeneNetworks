@@ -17,7 +17,7 @@ from torch_geometric.nn import (
 import torch.nn.functional as F
 from torch_scatter import scatter_add
 from torch_geometric.nn.inits import glorot, zeros
-from helpers import logger
+from .logging_setup import logger
 
 
 class GINConv(MessagePassing):
@@ -433,7 +433,12 @@ class GNN_pred(torch.nn.Module):
             )
 
     def from_pretrained(self, model_file, strict_bool):
-        self.gnn.load_state_dict(torch.load(model_file), strict=strict_bool)
+        try:
+            self.load_state_dict(torch.load(model_file), strict=strict_bool)
+        except RuntimeError:
+            self.gnn.load_state_dict(torch.load(model_file), strict=strict_bool)
+        finally:
+            return
 
     def forward(self, data, node_feat_mask=None, return_node_embedding=False):
         gnn_args = [data.x, data.edge_index, data.edge_attr]

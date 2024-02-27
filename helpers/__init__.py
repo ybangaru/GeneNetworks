@@ -32,13 +32,16 @@ from .mlflow_client_ import (
     MLFLOW_CLIENT,
     read_run_result_ann_data,
     read_run_attribute_clustering,
+    read_run_attribute_classification,
     read_run_annotations,
+    read_run_annotation_colors,
+    read_run_annotation_mapping,
     read_run_embeddings_df,
     read_run_node_true_pred_labels,
+    load_node_classification_model,
 )
 from .training_eval_anime import (
-    plotly_embeddings_anime_2d,
-    plotly_embeddings_anime_3d,
+    plotly_embeddings_anime,
     plotly_confusion_matrix_anime,
     plotly_precision_recall_curve_anime,
     plotly_classification_report_anime,
