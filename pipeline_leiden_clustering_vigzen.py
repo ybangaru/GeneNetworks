@@ -3,7 +3,7 @@ import ast
 from joblib import Parallel, delayed
 import mlflow
 import squidpy as sq
-from helpers import spatialPipeline, spatialPreProcessor, logger, VisualizePipeline, NO_JOBS
+from graphxl import spatialPipeline, spatialPreProcessor, logger, VisualizePipeline, NO_JOBS
 
 
 def run_parallel_spatial(filters_list):

@@ -2,16 +2,17 @@
 This script is typically used after leiden clustering to create networkx graphs for each slice segmented into multiple regions
 and save them in the form of pickle files. These pickle files are then used for training the graph neural network.
 """
+
 import warnings
 import multiprocessing
-from helpers import spatialPipeline, logger, NO_JOBS, DATA_DIR, COLORS_LIST
+from graphxl import spatialPipeline, logger, NO_JOBS, DATA_DIR, COLORS_LIST
 
 warnings.filterwarnings("ignore")
 
 
 CLUSTERING_RUN_ID = "c750f81070fa4ccbbd731b92746bebc6"
 UNIQUE_IDENTIFIER = "subcluster-finetune"
-GRAPH_FOLDER_NAME = "graph_self_edges"
+GRAPH_FOLDER_NAME = "graph_test"
 
 data_options = {
     "data_dir": DATA_DIR,

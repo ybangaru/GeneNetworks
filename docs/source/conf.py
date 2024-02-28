@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.abspath(os.path.join('..', '..', '..')))
 
 
 project = 'SpatialTranscriptomics'
-copyright = '2024, Yaswanth Bangaru'
-author = 'Yaswanth Bangaru'
+copyright = '2024, GraphXL'
+author = 'ybangaru <yaswanthbangaru13@gmail.com>'
 release = '0.0.1'
 
 

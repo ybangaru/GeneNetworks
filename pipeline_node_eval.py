@@ -1,7 +1,7 @@
 import os
 import warnings
 from torchviz import make_dot
-from helpers import (
+from graphxl import (
     MLFLOW_TRACKING_URI,
     plotly_confusion_matrix_anime,
     plotly_embeddings_anime,
@@ -56,6 +56,20 @@ def save_model_architecture_fig(exp_id, run_id, model_type="best"):
 if __name__ == "__main__":
     exp_id = "303267778283029741"
     run_ids = [
+        "1a142fc10f25471b8ffef7461537c4f9",
+        "a638f2d0fb71450d85f84aaca77bd845",
+        "c537b196744e4ae48570d6866bdd9456",
+        "1f7c37aa970f4c7a8ac9afe8d32bb5ed",
+        "a3861659eae64251bac16dc708e3f4dc",
+        "0e11b4b451904d89a87f1b52b3d8b9c9",
+        "dd711ce925664ebfaef76fb471d5e06a",
+        "e212a78bc3fb4eeda1abe489a7e83421",
+        "388044dd3d9d4e9d818f4c4bdbc282fc",
+        "840bd0581eb94c11af657d28f3957fe5",
+        "9d6744a8b9cb4de48e4efa9cee3900a6",
+        "b0730f640077408faf145fcc4e6bc354",
+        "d78e239af13c41f5a4bd67369354746c",
+        "4db27541a87e4b649f6b3154f4725c36",
         "ee8781107115495b87142ea068eda61a",
         "d78e239af13c41f5a4bd67369354746c",
         "b0730f640077408faf145fcc4e6bc354",
@@ -64,9 +78,17 @@ if __name__ == "__main__":
         "b1241973be1943fc9e8a88ab96b0c8fd",
     ]
 
-    for run_id in run_ids:
+    # run in parallel
+    def parallel_function(exp_id, run_id):
         try:
+            logger.info(f"Running run_id for node eval visuals: {run_id}")
             save_model_architecture_fig(exp_id, run_id, model_type="best")
             build_eval_anime(exp_id, run_id)
         except Exception as e:
             logger.error(f"Error in run_id: {run_id} with error: {e}")
+
+    fun_args = [(exp_id, run_id) for run_id in run_ids]
+
+    for args in fun_args:
+        parallel_function(*args)
+    logger.info("All run_ids completed")

@@ -3,7 +3,7 @@ import scanpy as sc
 from joblib import Parallel, delayed
 import mlflow
 
-from helpers import scRNAPreProcessor, scRNAPipeline, MLFLOW_TRACKING_URI
+from graphxl import scRNAPreProcessor, scRNAPipeline, MLFLOW_TRACKING_URI
 
 sc.settings.verbosity = 3
 sc.settings.set_figure_params(dpi=120, facecolor="white")

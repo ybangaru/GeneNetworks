@@ -4,8 +4,8 @@ import json
 import numpy as np
 import torch.nn as nn
 from sklearn.model_selection import train_test_split
-import helpers
-from helpers import CellularGraphDataset, NO_JOBS, train_subgraph, logger, MLFLOW_TRACKING_URI, MLFLOW_CLIENT
+import graphxl
+from graphxl import CellularGraphDataset, NO_JOBS, train_subgraph, logger, MLFLOW_TRACKING_URI, MLFLOW_CLIENT
 
 warnings.filterwarnings("ignore")
 warnings.filterwarnings("ignore", category=UserWarning, module="geopandas")
@@ -19,7 +19,7 @@ def train_node_classification(dataset_kwargs):
         # `AddCenterCellType` will add `node_y` attribute to the subgraph for node-level prediction task
         # In this task we will mask the cell type of the center cell (replace it by a placeholder cell type)
         # and use its neighborhood to predict the true cell type
-        helpers.AddCenterCellType(dataset),
+        graphxl.AddCenterCellType(dataset),
         # `AddGraphLabel` will add `graph_y` and `graph_w` attributes to the subgraph for graph-level prediction task
         # helpers.AddGraphLabel(graph_label_file, tasks=['survival_status']),
     ]
@@ -33,11 +33,11 @@ def train_node_classification(dataset_kwargs):
                 x for x in use_node_features if x not in dataset_kwargs["center_node_features_mask"]
             ]
         transformers.append(
-            helpers.FeatureMask(
+            graphxl.FeatureMask(
                 dataset,
-                use_center_node_features=use_center_node_features
-                if dataset_kwargs["center_node_features_mask"]
-                else use_node_features,
+                use_center_node_features=(
+                    use_center_node_features if dataset_kwargs["center_node_features_mask"] else use_node_features
+                ),
                 use_neighbor_node_features=use_node_features,
                 use_edge_features=dataset.edge_feature_names,
             )
@@ -67,7 +67,7 @@ def train_node_classification(dataset_kwargs):
         "edge_types": dataset_kwargs["edge_types"],
     }
 
-    model = helpers.GNN_pred(**model_kwargs)
+    model = graphxl.GNN_pred(**model_kwargs)
     device = "cpu"
 
     learning_rate = 0.01
@@ -85,19 +85,19 @@ def train_node_classification(dataset_kwargs):
         # 'graph_task_loss_fn': helpers.models.BinaryCrossEntropy(),
         # Evaluation during training
         "subsample_ratio": 0.1,  # Subsample 10% of the data for evaluation
-        "evaluate_fn": [helpers.train.evaluate_by_sampling_subgraphs],  # , helpers.train.evaluate_by_full_graph
+        "evaluate_fn": [graphxl.train.evaluate_by_sampling_subgraphs],  # , helpers.train.evaluate_by_full_graph
         "evaluate_on_train": True,
-        "model_save_fn": [helpers.train.save_models_best_latest],
+        "model_save_fn": [graphxl.train.save_models_best_latest],
         "evaluate_freq": 20,  # Evaluate the model every 10 iterations
         "embedding_log_freq": 20,
         "log_edge_embeddings": True,
     }
 
     evaluate_kwargs = {
-        "node_task_evaluate_fn": helpers.inference.cell_type_prediction_evaluate_fn,
-        # 'graph_task_evaluate_fn': helpers.inference.graph_classification_evaluate_fn,
-        # 'full_graph_node_task_evaluate_fn': helpers.inference.full_graph_cell_type_prediction_evaluate_fn,
-        # 'full_graph_graph_task_evaluate_fn': helpers.inference.full_graph_graph_classification_evaluate_fn,
+        "node_task_evaluate_fn": graphxl.inference.cell_type_prediction_evaluate_fn,
+        # 'graph_task_evaluate_fn': graphxl.inference.graph_classification_evaluate_fn,
+        # 'full_graph_node_task_evaluate_fn': graphxl.inference.full_graph_cell_type_prediction_evaluate_fn,
+        # 'full_graph_graph_task_evaluate_fn': graphxl.inference.full_graph_graph_classification_evaluate_fn,
         "num_eval_iterations": 5,
     }
     train_kwargs.update(evaluate_kwargs)
@@ -196,7 +196,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         "graph_type": graph_type,
         "node_embedding_size": NODE_EMBEDDING_SIZE,
         "edge_embedding_size": EDGE_EMBEDDING_SIZE,
-        "subgraph_node_type": "cc-types",  # other option is "cc-types" to filter nodes only of center cell type
+        "subgraph_node_type": "all-types",  # other option is "cc-types" to filter nodes only of center cell type
         "subgraph_size": SUBGRAPH_SIZE,  # indicating we want to sample 3-hop subgraphs from these regions (for training/inference), this is a core parameter for SPACE-GM.
         "subgraph_source": "on-the-fly",
         "subgraph_allow_distant_edge": True,
@@ -250,3 +250,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    # center_ind = 2579
+    # test_fig = dataset.plotly_subgraph(100, center_ind)
+    # test_fig.write_html("test_fig.html")
