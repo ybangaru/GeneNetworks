@@ -18,7 +18,7 @@ shapely = "^2.0.3"
 mlflow = "^2.10.2"
 geopandas = "0.13.2"
 opencv-python = "^4.9.0.80"
-torch-scatter = {version = "^2.1.2+pt22cpu", source = "torch-wheels"}
+torch-scatter = "^2.1.2+cpu"
 torchviz = "^0.0.2"
 kaleido = "0.2.1"
 dash = "^2.15.0"
@@ -37,6 +37,7 @@ priority = "supplemental"
 black = "^24.2.0"
 mypy = "^1.8.0"
 pylint = "^3.1.0"
+twine = "^5.0.0"
 
 
 [tool.poetry.group.docs.dependencies]

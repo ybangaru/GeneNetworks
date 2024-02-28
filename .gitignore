@@ -4,8 +4,14 @@ logs/
 mlruns/
 assets/
 extensions_vsix/
+__pycache__/
 
+# ignore virtual environment
+.venv/
+# ignore docs builds
 docs/build/
+# ignore package builds
+dist/
 
 panel_app.py
 styles.css
@@ -16,11 +22,10 @@ data_changes.py
 dashboard_test.py
 streamlit_config.yaml
 test_github_copilot.py
-
+test_napari.py
 test_*.py
-__pycache__/
+test_*.html
 .ipynb_checkpoints/
-.venv/
 .vscode/
 .virtual_documents
 .lsp_symlink
