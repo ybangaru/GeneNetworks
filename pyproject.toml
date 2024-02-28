@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "graphxl"
+version = "0.1.0"
+description = "Workbench for Deep Learning on network datasets"
+authors = ["ybangaru <yaswanthbangaru13@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.8"
+torch = ">=1.13.0"
+torch_geometric = ">=2.2.0"
+plotly = "^5.19.0"
+pandas = "1.4.4"
+scanpy = "^1.9.8"
+squidpy = "1.2.2"
+rtree = "^1.2.0"
+shapely = "^2.0.3"
+mlflow = "^2.10.2"
+geopandas = "0.13.2"
+opencv-python = "^4.9.0.80"
+torch-scatter = {version = "^2.1.2+pt22cpu", source = "torch-wheels"}
+torchviz = "^0.0.2"
+kaleido = "0.2.1"
+dash = "^2.15.0"
+
+[[tool.poetry.source]]
+name = "PyPI"
+priority = "primary"
+
+[[tool.poetry.source]]
+name = "torch-wheels"
+url = "https://data.pyg.org/whl/torch-2.2.0+cpu.html"
+priority = "supplemental"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.2.0"
+mypy = "^1.8.0"
+pylint = "^3.1.0"
+
+
+[tool.poetry.group.docs.dependencies]
+sphinx = "7.1.2"
+sphinx-rtd-theme = "^2.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

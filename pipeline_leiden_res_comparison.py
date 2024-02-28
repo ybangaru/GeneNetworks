@@ -1,19 +1,21 @@
 from joblib import Parallel, delayed
 import pandas as pd
-from helpers import logger, read_run_result_ann_data, NO_JOBS
+from graphxl import logger, read_run_result_ann_data, NO_JOBS, PROJECT_DIR
 import plotly.express as px
 
-from .helpers import PROJECT_DIR
 
-
-def build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_name, x_resolution, y_resolution, transformation=None):
+def build_comparison_heatmap(
+    x_data, y_data, x_data_filter_name, y_data_filter_name, x_resolution, y_resolution, transformation=None
+):
 
     # Convert the Series to DataFrames
-    x_data_df = pd.DataFrame({'x_category': x_data.obs.leiden_res})
-    y_data_df = pd.DataFrame({'y_category': y_data.obs.leiden_res})
+    x_data_df = pd.DataFrame({"x_category": x_data.obs.leiden_res})
+    y_data_df = pd.DataFrame({"y_category": y_data.obs.leiden_res})
 
     # Create an empty DataFrame to store cell IDs
-    heatmap_data = pd.DataFrame(index=x_data_df['x_category'].cat.categories, columns=y_data_df['y_category'].cat.categories)
+    heatmap_data = pd.DataFrame(
+        index=x_data_df["x_category"].cat.categories, columns=y_data_df["y_category"].cat.categories
+    )
 
     # Create dictionaries to store common and missing cell IDs
     common_cells_dict = {}
@@ -22,8 +24,8 @@ def build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_n
     # Iterate through the data and fill in the DataFrame and dictionaries
     for x_cat in heatmap_data.index:
         for y_cat in heatmap_data.columns:
-            x_cells = x_data_df[x_data_df['x_category'] == x_cat].index
-            y_cells = y_data_df[y_data_df['y_category'] == y_cat].index
+            x_cells = x_data_df[x_data_df["x_category"] == x_cat].index
+            y_cells = y_data_df[y_data_df["y_category"] == y_cat].index
             common_cells = list(set(x_cells) & set(y_cells))
             excess_cells_x = list(set(x_cells) - set(y_cells))
             excess_cells_y = list(set(y_cells) - set(x_cells))
@@ -50,10 +52,10 @@ def build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_n
             x=heatmap_data.columns,
             y=heatmap_data.index,
             labels=dict(x=y_label, y=x_label),
-            title=given_title, 
+            title=given_title,
             zmin=0,
-            zmax=100,      
-        )        
+            zmax=100,
+        )
     else:
         given_title = "common cell counts"
         fig = px.imshow(
@@ -61,8 +63,8 @@ def build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_n
             x=heatmap_data.columns,
             y=heatmap_data.index,
             labels=dict(x=y_label, y=x_label),
-            title=given_title, 
-        )        
+            title=given_title,
+        )
 
     # Customize the layout
     fig.update_layout(
@@ -72,7 +74,7 @@ def build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_n
         # margin=dict(
         #     # t=10,  # Adjust this value to control the margin at the top
         #     # b=50,   # You can also adjust the margin at the bottom if needed
-        # ),        
+        # ),
     )
 
     return fig
@@ -107,8 +109,12 @@ def build_cluster_comparison(info_tuple):
     )
 
     transformation = "vertical-percentage"
-    fig_transformation = build_comparison_heatmap(x_data, y_data, x_data_filter_name, y_data_filter_name, x_resolution, y_resolution, transformation)
-    fig_name_transformation = f"{x_data_filter_name}={x_resolution}-{y_data_filter_name}={y_resolution}_vertical_percent"
+    fig_transformation = build_comparison_heatmap(
+        x_data, y_data, x_data_filter_name, y_data_filter_name, x_resolution, y_resolution, transformation
+    )
+    fig_name_transformation = (
+        f"{x_data_filter_name}={x_resolution}-{y_data_filter_name}={y_resolution}_vertical_percent"
+    )
     fig_transformation.write_html(
         f"{directory_run}/{fig_name_transformation}.html",
         full_html=False,

@@ -1,21 +1,32 @@
 #!/usr/bin/bash
 
+################################################################################
+# Description: This script deploys a jupyterlab instance interactive shell environment.
+#              The environment setup is available under the filename jupyterlab.yml
+#              in the project directory which needs to be used to create a conda environment
+#              called `jupyterlab`.
+# **Note: # requires config modifications based on slurm cluster setup
+# Usage: To start jupyterlab on Slurm cluster, run this script as a job using
+#        the `sbatch` command.
+#        For example, `sbatch jobs_slurm/jupyter_lab.sh` while in the PROJECT_DIR.
+################################################################################
+
+# SLURM job parameters
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem-per-cpu=256G
 #SBATCH --time=0-7:00
-#SBATCH --job-name=qd452774-jupyter-lab
-#SBATCH --output=spatial_transcriptomics/logs/jupyter-lab-%J.log
+#SBATCH --job-name=jlab-instance
+#SBATCH --output=logs/jlab-%J.log
 
 echo "------------------------------------------------------------"
 echo "SLURM JOB ID: $SLURM_JOBID"
 echo "Running on nodes: $SLURM_NODELIST"
 echo "------------------------------------------------------------"
 
-# Load the same python as used for installation
-# module load python37
-# Insert this AFTER the #SLURM argument section of your job script
+# Load environment modules
+# Note: You may need to modify this based on your cluster setup
 export CONDA_ROOT=/data/qd452774/miniconda3
 source $CONDA_ROOT/etc/profile.d/conda.sh
 export PATH="$CONDA_ROOT/bin:$PATH"
@@ -47,6 +58,9 @@ echo "To stop this notebook, run 'scancel $SLURM_JOB_ID'"
 # This is the machine we will connect to with SSH forward tunneling from our client.
 ssh -R$TUNNELPORT\:localhost:$NOTEBOOKPORT $SLURM_SUBMIT_HOST -N -f
 
-# Start the notebook
+# Start the jupyterlab
 srun -n1 jupyter lab --no-browser --port=$NOTEBOOKPORT --NotebookApp.token=$TOKEN --log-level WARN
 # To stop the notebook, use 'scancel'
+
+# Start the notebook example
+# srun -n1 jupyter nbconvert --to python --execute pipeline_visualizations.ipynb

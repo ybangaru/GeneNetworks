@@ -17,6 +17,7 @@ from joblib import Parallel, delayed
 import plotly.io as pio
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+
 # import plotly.colors.qualitative as pcq
 import plotly.colors as pc
 
@@ -27,8 +28,6 @@ sc.settings.set_figure_params(dpi=120, facecolor="white")
 
 
 # In[2]:
-
-
 
 
 class VisualizePipeline:
@@ -42,12 +41,8 @@ class VisualizePipeline:
         self.all_generated_figs = {}
         self.all_generated_umaps = {}
         self.data = self.read_data()
-        self.categorical_columns = self.data.obs.select_dtypes(
-            include=["category", "object", "bool"]
-        ).columns
-        self.numerical_columns = self.data.obs.select_dtypes(
-            include=["float32", "int32", "float64", "int64"]
-        ).columns
+        self.categorical_columns = self.data.obs.select_dtypes(include=["category", "object", "bool"]).columns
+        self.numerical_columns = self.data.obs.select_dtypes(include=["float32", "int32", "float64", "int64"]).columns
 
     def read_data(self):
         # if not self.data:
@@ -95,7 +90,7 @@ class VisualizePipeline:
                 self.filters[1],
                 color_key=cate_item,
                 from_annotations=False,
-            )            
+            )
             self.all_generated_umaps[f"{self.type_fig}_{cate_item}"] = fig_false
         for num_item in self.numerical_columns:
             fig_true = plotly_umap_numerical(
@@ -115,6 +110,7 @@ class VisualizePipeline:
             )
             self.all_generated_umaps[f"{self.type_fig}_{num_item}"] = fig_false
 
+
 def plotly_pca_categorical(
     adata,
     filters,
@@ -127,18 +123,11 @@ def plotly_pca_categorical(
 ):
 
     if "pca" not in adata.obsm.keys() and "X_pca" not in adata.obsm.keys():
-        raise KeyError(
-            f"Could not find entry in `obsm` for 'pca'.\n"
-            f"Available keys are: {list(adata.obsm.keys())}."
-        )
+        raise KeyError(f"Could not find entry in `obsm` for 'pca'.\n" f"Available keys are: {list(adata.obsm.keys())}.")
 
     # Get the PCA coordinates and variance explained
     pca_coords = adata.obsm["pca"] if "pca" in adata.obsm.keys() else adata.obsm["X_pca"]
-    var_exp = (
-        adata.uns["pca"]["variance_ratio"]
-        if "pca" in adata.obsm.keys() or "X_pca" in adata.obsm.keys()
-        else None
-    )
+    var_exp = adata.uns["pca"]["variance_ratio"] if "pca" in adata.obsm.keys() or "X_pca" in adata.obsm.keys() else None
 
     # Create a dataframe of the PCA coordinates with sample names as the index
     pca_df = pd.DataFrame(
@@ -210,18 +199,11 @@ def plotly_pca_numerical(
 ):
 
     if "pca" not in adata.obsm.keys() and "X_pca" not in adata.obsm.keys():
-        raise KeyError(
-            f"Could not find entry in `obsm` for 'pca'.\n"
-            f"Available keys are: {list(adata.obsm.keys())}."
-        )
+        raise KeyError(f"Could not find entry in `obsm` for 'pca'.\n" f"Available keys are: {list(adata.obsm.keys())}.")
 
     # Get the PCA coordinates and variance explained
     pca_coords = adata.obsm["pca"] if "pca" in adata.obsm.keys() else adata.obsm["X_pca"]
-    var_exp = (
-        adata.uns["pca"]["variance_ratio"]
-        if "pca" in adata.obsm.keys() or "X_pca" in adata.obsm.keys()
-        else None
-    )
+    var_exp = adata.uns["pca"]["variance_ratio"] if "pca" in adata.obsm.keys() or "X_pca" in adata.obsm.keys() else None
 
     # Create a dataframe of the PCA coordinates with sample names as the index
     pca_df = pd.DataFrame(
@@ -297,27 +279,27 @@ def plotly_pca_numerical(
 
 
 def plotly_umap_categorical(adata, chosen_key, chosen_value, color_key, from_annotations):
-    fig=None
+    fig = None
 
     if from_annotations == True:
-        umap_coords = adata.obs[['UMAP_1', 'UMAP_2']].values
+        umap_coords = adata.obs[["UMAP_1", "UMAP_2"]].values
         color_list = adata.obs[color_key]
-        if chosen_key=='all':
-            plot_title = f'UMAPs source data, known observations'        
+        if chosen_key == "all":
+            plot_title = f"UMAPs source data, known observations"
         else:
-            plot_title = f'UMAP source data, {chosen_key} - {chosen_value}'
+            plot_title = f"UMAP source data, {chosen_key} - {chosen_value}"
 
     else:
-        umap_coords = adata.obsm['X_umap']
-        color_list = adata.obs[color_key].astype(str).replace('nan', 'Unknown')
-        if chosen_key=='all':
-            plot_title = f'UMAPs constructed, {chosen_key} observations'        
+        umap_coords = adata.obsm["X_umap"]
+        color_list = adata.obs[color_key].astype(str).replace("nan", "Unknown")
+        if chosen_key == "all":
+            plot_title = f"UMAPs constructed, {chosen_key} observations"
         else:
-            plot_title = f'UMAP constructed, {chosen_key} - {chosen_value}'
-    
+            plot_title = f"UMAP constructed, {chosen_key} - {chosen_value}"
+
     # Get unique values of color_key
     unique_colors = color_list.unique()
-    
+
     # Get a list of discrete colors from Plotly
     # colors_from_plotly = pcq.D3
     colors_from_plotly = pc.DEFAULT_PLOTLY_COLORS
@@ -344,17 +326,18 @@ def plotly_umap_categorical(adata, chosen_key, chosen_value, color_key, from_ann
                 y=umap_coords[color_mask, 1],
                 mode="markers",
                 marker_color=[color_dict[c] for c in color_list[color_mask]],
-                name=str(color)
+                name=str(color),
             )
         )
 
-    x_label = 'UMAP1'
-    y_label = 'UMAP2'
+    x_label = "UMAP1"
+    y_label = "UMAP2"
     fig.update_layout(
-        title=f'{plot_title}', height=800, #width=800, 
-        xaxis_title=x_label, 
-        yaxis_title=y_label, 
-        legend= {"title" : f"{color_key} categories", "itemsizing": "constant", "itemwidth": 30},
+        title=f"{plot_title}",
+        height=800,  # width=800,
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        legend={"title": f"{color_key} categories", "itemsizing": "constant", "itemwidth": 30},
         xaxis_showgrid=False,
         yaxis_showgrid=False,
     )
@@ -363,29 +346,28 @@ def plotly_umap_categorical(adata, chosen_key, chosen_value, color_key, from_ann
 
 
 def plotly_umap_numerical(adata, chosen_key, chosen_value, color_key, from_annotations):
-    fig=None
+    fig = None
 
     if from_annotations == True:
-        umap_coords = adata.obs[['UMAP_1', 'UMAP_2']].values
-        if chosen_key=='all':
-            plot_title = f'UMAPs source data, known observations'        
+        umap_coords = adata.obs[["UMAP_1", "UMAP_2"]].values
+        if chosen_key == "all":
+            plot_title = f"UMAPs source data, known observations"
         else:
-            plot_title = f'UMAP source data, {chosen_key} - {chosen_value}'
+            plot_title = f"UMAP source data, {chosen_key} - {chosen_value}"
 
     else:
-        umap_coords = adata.obsm['X_umap']
-        if chosen_key=='all':
-            plot_title = f'UMAPs constructed, {chosen_key} observations'        
+        umap_coords = adata.obsm["X_umap"]
+        if chosen_key == "all":
+            plot_title = f"UMAPs constructed, {chosen_key} observations"
         else:
-            plot_title = f'UMAP constructed, {chosen_key} - {chosen_value}'
-
+            plot_title = f"UMAP constructed, {chosen_key} - {chosen_value}"
 
     color_list = adata.obs[color_key]
     # color_list = adata.obs[color_key].astype(str).replace('nan', 'Unknown')
 
     # Get unique values of color_key
     # unique_colors = color_list.unique()
-    
+
     # Get a list of discrete colors from Plotly
     # colors_from_plotly = pcq.D3
     # colors_from_plotly = pc.DEFAULT_PLOTLY_COLORS
@@ -395,21 +377,17 @@ def plotly_umap_numerical(adata, chosen_key, chosen_value, color_key, from_annot
     # for i, string in enumerate(unique_colors):
     #     color_dict[string] = colors_from_plotly[i % len(colors_from_plotly)]
 
-    fig = px.scatter(
-        x=umap_coords[:, 0],
-        y=umap_coords[:, 1],
-        color=color_list,
-        labels={'color':f'{color_key}'}
-    )
+    fig = px.scatter(x=umap_coords[:, 0], y=umap_coords[:, 1], color=color_list, labels={"color": f"{color_key}"})
 
-    x_label = 'UMAP1'
-    y_label = 'UMAP2'
-    fig.update_traces(marker=dict(size=2.5))    
+    x_label = "UMAP1"
+    y_label = "UMAP2"
+    fig.update_traces(marker=dict(size=2.5))
     fig.update_layout(
-        title=f'{plot_title}', height=800, #width=800, 
-        xaxis_title=x_label, 
-        yaxis_title=y_label, 
-        legend= {"title" : f"{color_key}", "itemsizing": "constant", "itemwidth": 30},
+        title=f"{plot_title}",
+        height=800,  # width=800,
+        xaxis_title=x_label,
+        yaxis_title=y_label,
+        legend={"title": f"{color_key}", "itemsizing": "constant", "itemwidth": 30},
         xaxis_showgrid=False,
         yaxis_showgrid=False,
     )
@@ -420,41 +398,42 @@ def run_viz_pipeline(filters):
 
     # mlflow.set_tracking_uri("/home/qd452774/spatial_transcriptomics/mlruns")
     # mlflow.set_experiment(f"scRNA_clustering_{filters[0]}={filters[1]}")
-    
+
     plots_instance = VisualizePipeline(filters, "PCA")
     # plots_instance.file_name
     # plots_instance.filters
     plots_instance.generate_pca_plots()
 
-    directory_run = f'/home/qd452774/spatial_transcriptomics/data/{filters[3]}/{filters[5]}'
+    directory_run = f"/home/qd452774/spatial_transcriptomics/data/{filters[3]}/{filters[5]}"
     if not os.path.exists(directory_run):
         os.makedirs(directory_run)
-        
+
     with mlflow.start_run(run_id=filters[5], experiment_id=filters[3]) as run:
 
         for fig_name in plots_instance.all_generated_figs.keys():
             fig = plots_instance.all_generated_figs[fig_name]
             # Save the figure as an HTML file
-            fig.write_html(f"{directory_run}/{fig_name}.html", full_html=False, include_plotlyjs='cdn')
+            fig.write_html(f"{directory_run}/{fig_name}.html", full_html=False, include_plotlyjs="cdn")
 
             # mlflow.plotting.plot(div, artifact_file=f"{fig_name}.html", plot_format="html")
             # print(fig_name)
-#             with open(f"/home/qd452774/spatial_transcriptomics/data/{fig_name}.html", "w") as f:
-#                 f.write(div)
+            #             with open(f"/home/qd452774/spatial_transcriptomics/data/{fig_name}.html", "w") as f:
+            #                 f.write(div)
 
             mlflow.log_artifact(f"{directory_run}/{fig_name}.html", f"PCA")
 
         mlflow.end_run()
-        
+
+
 def run_umap_pipeline(filters):
     try:
-    
+
         plots_instance = VisualizePipeline(filters, "UMAP")
         # plots_instance.file_name
         # plots_instance.filters
         plots_instance.generate_umap_plots()
 
-        directory_run = f'/home/qd452774/spatial_transcriptomics/data/{filters[3]}/{filters[5]}'
+        directory_run = f"/home/qd452774/spatial_transcriptomics/data/{filters[3]}/{filters[5]}"
         if not os.path.exists(directory_run):
             os.makedirs(directory_run)
 
@@ -463,12 +442,12 @@ def run_umap_pipeline(filters):
             for fig_name in plots_instance.all_generated_umaps.keys():
                 fig = plots_instance.all_generated_umaps[fig_name]
                 # Save the figure as an HTML file
-                fig.write_html(f"{directory_run}/{fig_name}.html", full_html=False, include_plotlyjs='cdn')
+                fig.write_html(f"{directory_run}/{fig_name}.html", full_html=False, include_plotlyjs="cdn")
 
                 # mlflow.plotting.plot(div, artifact_file=f"{fig_name}.html", plot_format="html")
                 # print(fig_name)
-    #             with open(f"/home/qd452774/spatial_transcriptomics/data/{fig_name}.html", "w") as f:
-    #                 f.write(div)
+                #             with open(f"/home/qd452774/spatial_transcriptomics/data/{fig_name}.html", "w") as f:
+                #                 f.write(div)
 
                 mlflow.log_artifact(f"{directory_run}/{fig_name}.html", f"UMAP")
 
@@ -476,14 +455,12 @@ def run_umap_pipeline(filters):
     except:
         pass
 
+
 def run_parallel(filters_list):
     Parallel(n_jobs=2)(delayed(run_viz_pipeline)(f) for f in filters_list)
 
 
 # In[ ]:
-
-
-
 
 
 # In[3]:
@@ -518,13 +495,19 @@ for tuple_filter in dst_pca_filters_list:
 
     for each_run in my_runs:
         try:
-            artifact_location_base = f"/home/qd452774/spatial_transcriptomics/mlruns/{my_experiment_id}/{each_run.info.run_uuid}/artifacts"
-            
-            if each_run.data.tags['state'] == 'disease-state':
-                my_filename = f"{artifact_location_base}/data/scRNA_clustering_ds_{each_run.data.tags['data_filter']}.h5ad"
+            artifact_location_base = (
+                f"/home/qd452774/spatial_transcriptomics/mlruns/{my_experiment_id}/{each_run.info.run_uuid}/artifacts"
+            )
+
+            if each_run.data.tags["state"] == "disease-state":
+                my_filename = (
+                    f"{artifact_location_base}/data/scRNA_clustering_ds_{each_run.data.tags['data_filter']}.h5ad"
+                )
             else:
-                my_filename = f"{artifact_location_base}/data/scRNA_clustering_ss_{each_run.data.tags['data_filter']}.h5ad"
-                
+                my_filename = (
+                    f"{artifact_location_base}/data/scRNA_clustering_ss_{each_run.data.tags['data_filter']}.h5ad"
+                )
+
             all_experiments_config.append(
                 (
                     tuple_filter[0],
@@ -569,8 +552,8 @@ run_parallel(all_experiments_config)
 
 
 # for experiments_config_item in all_experiments_config:
-    # run_viz_pipeline(all_experiments_config[-6])
-    # run_viz_pipeline(experiments_config_item)
+# run_viz_pipeline(all_experiments_config[-6])
+# run_viz_pipeline(experiments_config_item)
 
 
 # In[10]:
@@ -588,11 +571,7 @@ run_parallel(all_experiments_config)
 # In[35]:
 
 
-
-
-
 # In[12]:
-
 
 
 # sample_pipeline = VisualizePipeline(all_experiments_config[-1], "UMAP")
@@ -623,7 +602,6 @@ run_parallel(all_experiments_config)
 # In[16]:
 
 
-
 # chosen_legend=categorical_columns[6]
 
 # fig_true = plotly_umap_categorical(sample_pipeline.data, chosen_key, chosen_value, color_key=chosen_legend, from_annotations=True)#, 'digest', 'typeSample'])
@@ -647,12 +625,6 @@ run_parallel(all_experiments_config)
 # In[19]:
 
 
-
-
-
-
-
-
 # numerical_columns = sample_pipeline.numerical_columns
 
 
@@ -663,9 +635,6 @@ run_parallel(all_experiments_config)
 
 
 # In[ ]:
-
-
-
 
 
 # In[21]:
@@ -712,7 +681,3 @@ run_parallel(all_experiments_config)
 
 
 # In[ ]:
-
-
-
-
