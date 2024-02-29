@@ -12,7 +12,6 @@ build:
       - pip install poetry
       # Tell poetry to not use a virtual environment
       - poetry config virtualenvs.create false
-    post_install:
       - poetry install --only docs
 
 # Specify the Sphinx version
