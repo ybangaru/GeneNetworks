@@ -11,5 +11,6 @@ build:
     # Tell poetry to not use a virtual environment
     - poetry config virtualenvs.create false
     - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --with docs
+    - pip install torch-scatter==2.1.2+pt22cpu -f https://data.pyg.org/whl/torch-2.2.0+cpu.html
     - sphinx-build -b html docs/source docs/build
     - cp -r docs/build/html $READTHEDOCS_PROJECT_PATH/html
