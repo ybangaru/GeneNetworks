@@ -9,10 +9,10 @@
 import os
 import sys
 
-sys.path.insert(0, os.path.abspath(os.path.join('..', '..', '..')))
+sys.path.insert(0, os.path.abspath('../../graphxl'))
 
 
-project = 'SpatialTranscriptomics'
+project = 'GraphXL'
 copyright = '2024, GraphXL'
 author = 'ybangaru <yaswanthbangaru13@gmail.com>'
 release = '0.0.1alpha'
