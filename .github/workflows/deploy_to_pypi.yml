@@ -15,12 +15,13 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.x
+        python-version: 3.8
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install poetry
+        poetry config virtualenvs.in-project true
         poetry install --only dev
 
     - name: Build and publish
@@ -28,5 +29,7 @@ jobs:
         PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
         PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
       run: |
+        cd $GITHUB_WORKSPACE
         poetry build
-        python -m twine upload dist/*.whl --username $PYPI_USERNAME --password $PYPI_PASSWORD
+        source .venv/bin/activate        
+        python3 -m twine upload dist/*.whl --username $PYPI_USERNAME --password $PYPI_PASSWORD
