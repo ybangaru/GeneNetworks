@@ -13,6 +13,7 @@ build:
       # Tell poetry to not use a virtual environment
       - poetry config virtualenvs.create false
       - poetry install --only docs
+      - pip install sphinx_rtd_theme
 
 # Specify the Sphinx version
 sphinx:
