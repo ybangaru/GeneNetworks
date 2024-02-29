@@ -14,6 +14,7 @@ build:
       - poetry config virtualenvs.create false
       - poetry install --only docs
       - pip install sphinx_rtd_theme
+      - pip install graphxl==0.1.0a0
 
 # Specify the Sphinx version
 sphinx:
