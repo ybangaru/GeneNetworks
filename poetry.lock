@@ -4679,33 +4679,6 @@ modelhub = ["huggingface_hub"]
 test = ["onnx", "onnxruntime", "pytest", "pytest-cov"]
 
 [[package]]
-name = "torch-scatter"
-version = "2.1.2+pt22cpu"
-description = "PyTorch Extension Library of Optimized Scatter Operations"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "torch_scatter-2.1.2+pt22cpu-cp310-cp310-linux_x86_64.whl", hash = "sha256:716a423f47c8a275353fc28b31d5b25aaebcff3759a237b10e8fd2f7293506ce"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp310-cp310-win_amd64.whl", hash = "sha256:d7af2bbcfdb1db3acecabe68e0499cc3b27bc432b0d76d548e17f304a4751d81"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp311-cp311-linux_x86_64.whl", hash = "sha256:656bca47f7e6b3ef9ad26234a401d764fa5aa03404f56941080f070ac4cd3bff"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp311-cp311-win_amd64.whl", hash = "sha256:de422894170b36dcd01ccb7e7781b1113306c1f514f11e13fae7db6938f976f6"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp312-cp312-linux_x86_64.whl", hash = "sha256:2963a27ad2ed5f295642d996c1f182c5582c44bae1177e1838446693883b54ac"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp312-cp312-win_amd64.whl", hash = "sha256:669332d2635216df5866eff7aeb8cc6c891a41de3e6d0936c8780c7ea7af4385"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp38-cp38-linux_x86_64.whl", hash = "sha256:104238539ab1027502353d4eec5d3391b5ea3324091f736006f931604e6c92e3"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp38-cp38-win_amd64.whl", hash = "sha256:1103e2d6c5a30b0932f5d5a10565566850186a6cb1d4064874199ab6b10f6540"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp39-cp39-linux_x86_64.whl", hash = "sha256:121cd5499a634d7b02bc87411ced0901ed8e7151f2eb3cd29dfe47053a4523a3"},
-    {file = "torch_scatter-2.1.2+pt22cpu-cp39-cp39-win_amd64.whl", hash = "sha256:31d790af2d2f8cc2b5e09de362359c94f30d651a5c0ea9f0d6ac257741a55811"},
-]
-
-[package.extras]
-test = ["pytest", "pytest-cov"]
-
-[package.source]
-type = "legacy"
-url = "https://data.pyg.org/whl/torch-2.2.0+cpu.html"
-reference = "torch-wheels"
-
-[[package]]
 name = "torchviz"
 version = "0.0.2"
 description = "A small package to create visualizations of PyTorch execution graphs"
@@ -5134,4 +5107,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.8"
-content-hash = "20200d61fc74a1fb3aa3f6bdd74700ab79fad81bd34f3d917a11461692a38307"
+content-hash = "cde1e6a479055e58859546628f0647bfb9c16b045748ad268eaacd361a7bdf5d"
