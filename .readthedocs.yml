@@ -10,7 +10,6 @@ build:
     - pip install poetry
     # Tell poetry to not use a virtual environment
     - poetry config virtualenvs.create false
-    - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --only docs
+    - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --with docs
     - sphinx-build -b html docs/source docs/build
-    - mkdir -p $READTHEDOCS_PROJECT_PATH/html
     - cp -r docs/build/html $READTHEDOCS_PROJECT_PATH/html
