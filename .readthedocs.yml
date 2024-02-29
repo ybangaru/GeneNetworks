@@ -14,14 +14,9 @@ build:
       # Tell poetry to not use a virtual environment
       - poetry config virtualenvs.create false
       - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --only docs
-
-  commands:
-    - cd docs
-    - chmod +x make.sh
-    - ./make.sh html
-    - cp -r build/html $READTHEDOCS_PROJECT_PATH/html
-
-# Specify the Sphinx version
-sphinx:
-  configuration: docs/source/conf.py
-  builder: html
+    commands:
+      - cd docs
+      - chmod +x make.sh
+      - ./make.sh html
+      - mkdir -p $READTHEDOCS_PROJECT_PATH/html
+      - cp -r build/html $READTHEDOCS_PROJECT_PATH/html
