@@ -1,0 +1,18 @@
+# Build documentation in the latest version of Sphinx
+version: 2
+
+# Use the Python version specified in your project
+build:
+  os: ubuntu-22.04
+  tools:
+    python: "3.8"
+
+python:
+  install:
+    - method: custom
+      command: poetry install --only docs
+
+# Specify the Sphinx version
+sphinx:
+  configuration: docs/conf.py
+  builder: html
