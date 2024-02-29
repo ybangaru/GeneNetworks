@@ -10,11 +10,16 @@ build:
   jobs:
     post_create_environment:
       - pip install poetry
+    post_install:
       # Tell poetry to not use a virtual environment
       - poetry config virtualenvs.create false
-      - poetry install --only docs
-      - pip install sphinx_rtd_theme
-      - pip install graphxl==0.1.0a0
+      - VIRTUAL_ENV=$READTHEDOCS_VIRTUALENV_PATH poetry install --only docs
+
+  commands:
+    - cd docs
+    - chmod +x make.sh
+    - ./make.sh html
+    - cp -r build/html $READTHEDOCS_PROJECT_PATH/html
 
 # Specify the Sphinx version
 sphinx:
