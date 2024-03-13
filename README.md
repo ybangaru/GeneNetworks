@@ -1,4 +1,12 @@
 <!-- Needs changes -->
+
+
+<!-- add images from docs/slides -->
+
+![screenshot](docs/slides/Slide2.jpg)
+
+
+
 Python env setup
 load python 3.8 module
 in SLURM - module load python/3.8.18 (verify the version using "module avail" command)
