@@ -95,7 +95,7 @@ def process_neighbor_composition(G, node_ind, cell_type_mapping=None, neighborho
 
     comp_vec = np.zeros((len(cell_type_mapping),))
     for n in closest_neighbors:
-        cell_type = cell_type_mapping[kwargs["cell_type_mapping"][G.nodes[node_ind]["cell_type"]]]
+        cell_type = cell_type_mapping[G.nodes[node_ind]["cell_type"]]
         comp_vec[cell_type] += 1
     comp_vec = list(comp_vec / comp_vec.sum())
     return comp_vec

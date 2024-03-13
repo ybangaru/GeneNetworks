@@ -241,7 +241,7 @@ class CellularGraphDataset(Dataset):
         """Featurize all cellular graphs"""
 
         from joblib import Parallel, delayed
-        from helpers import NO_JOBS
+        from graphxl import NO_JOBS
 
         def run_parallel_processing(files_names):
             Parallel(n_jobs=NO_JOBS, backend="loky")(delayed(save_file)(f) for f in files_names)
@@ -513,7 +513,7 @@ class CellularGraphDataset(Dataset):
 
         return buffer
 
-    def plotly_subgraphs_list(self, idx, filter_self_edges=True, size=10):
+    def plotly_subgraphs_list(self, idx, filter_self_edges=True, size=10, variation="default"):
         """Plot a list of subgraphs from the dataset"""
         data = self.get_full(idx)
         subgraph_center_inds = []
@@ -524,11 +524,13 @@ class CellularGraphDataset(Dataset):
 
         plots_ = []
         for center_ind in subgraph_center_inds:
-            plots_.append(self.plotly_subgraph(idx, center_ind, filter_self_edges=filter_self_edges))
+            plots_.append(
+                self.plotly_subgraph(idx, center_ind, filter_self_edges=filter_self_edges, variation=variation)
+            )
 
         return plots_
 
-    def plotly_subgraph(self, idx, center_ind, filter_self_edges=True):
+    def plotly_subgraph(self, idx, center_ind, filter_self_edges=True, variation="default"):
         xcoord_ind = self.node_feature_names.index("center_coord-x")
         ycoord_ind = self.node_feature_names.index("center_coord-y")
         boundary_feat = "voronoi_polygon" if "voronoi_polygon" in self.node_features else "boundary_polygon"
@@ -584,7 +586,9 @@ class CellularGraphDataset(Dataset):
         if filter_self_edges:
             edges_df = edges_df[edges_df["edge_type"] != "self"]
 
-        return plotly_spatial_scatter_subgraph(data_df, subgraph_edges=edges_df)
+        return plotly_spatial_scatter_subgraph(
+            data_df, subgraph_edges=edges_df, center_node_index=_subg.center_node_index, variation=variation
+        )
 
     def plot_graph_legend(self):
         """Legend for cell type colors"""

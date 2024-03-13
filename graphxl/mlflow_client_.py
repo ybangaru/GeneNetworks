@@ -350,8 +350,6 @@ def load_node_classification_model(experiment_id, run_id, model_type, return_ite
             )
         )
 
-    # TODO: handle edge features mask
-
     dataset.set_transforms(transformers)
 
     model_kwargs = {

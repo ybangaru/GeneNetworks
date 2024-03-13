@@ -577,7 +577,7 @@ def plotly_spatial_scatter_edges(G, node_color_col, edge_info, color_dict=None):
     return fig
 
 
-def plotly_spatial_scatter_subgraph(df, subgraph_edges=None):
+def plotly_spatial_scatter_subgraph(df, subgraph_edges=None, center_node_index=None, variation="default"):
     fig = go.Figure()
 
     x_label = "X-position"
@@ -629,11 +629,21 @@ def plotly_spatial_scatter_subgraph(df, subgraph_edges=None):
             "distant": "dash",
             "self": "dot",
         }
-        edge_types_color = {
-            "neighbor": "white",
-            "distant": "gold",
-            "self": "gray",
-        }
+        if variation == "transparent":
+            edge_types_color = {
+                "neighbor": "black",
+                "distant": "brown",
+                "self": "gray",
+            }
+        elif variation == "default":
+            edge_types_color = {
+                "neighbor": "white",
+                "distant": "gold",
+                "self": "gray",
+            }
+        else:
+            raise ValueError(f"Invalid variation: {variation}. Must be 'default' or 'transparent'.")
+
         for design_type in edge_types_design:
             filtered_edges = subgraph_edges[subgraph_edges["edge_type"] == design_type]
             # Extract coordinates from the DataFrame using vectorized operations
@@ -660,20 +670,44 @@ def plotly_spatial_scatter_subgraph(df, subgraph_edges=None):
                     )
                     fig.add_trace(edge_trace)
 
-    # Set layout properties
-    fig.update_layout(
-        title="cell type representation",
-        xaxis_showgrid=False,
-        yaxis_showgrid=False,
-        xaxis_title=x_label,
-        yaxis_title=y_label,
-        height=600,
-        # width=500,
-        legend=dict(
-            itemsizing="constant",
-            title_font_family="Courier New",
-        ),
-    )
+    # mark center cell with arrow
+    if center_node_index is not None:
+        center_node = df.loc[center_node_index]
+        center_x = center_node["x"]
+        center_y = center_node["y"]
+        fig.add_annotation(
+            x=center_x,
+            y=center_y,
+            text="Center Cell",
+            arrowhead=4,
+            showarrow=True,
+            arrowcolor="black" if variation == "transparent" else "white",
+            font=dict(color="grey"),
+        )
+
+    if variation == "transparent":
+        fig.update_layout(
+            showlegend=False,
+            xaxis=dict(showgrid=False, visible=False),
+            yaxis=dict(showgrid=False, visible=False),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
+        )
+    else:
+        # Set layout properties
+        fig.update_layout(
+            title="cell type representation",
+            xaxis_showgrid=False,
+            yaxis_showgrid=False,
+            xaxis_title=x_label,
+            yaxis_title=y_label,
+            height=600,
+            # width=500,
+            legend=dict(
+                itemsizing="constant",
+                title_font_family="Courier New",
+            ),
+        )
 
     return fig
 
