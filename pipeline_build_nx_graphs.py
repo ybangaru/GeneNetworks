@@ -9,7 +9,6 @@ from graphxl import spatialPipeline, logger, NO_JOBS, DATA_DIR, COLORS_LIST
 
 warnings.filterwarnings("ignore")
 
-
 CLUSTERING_RUN_ID = "c750f81070fa4ccbbd731b92746bebc6"
 UNIQUE_IDENTIFIER = "subcluster-finetune"
 GRAPH_FOLDER_NAME = "graph_test"
@@ -31,6 +30,10 @@ unique_colors = sorted(pipeline_instance.data.obs["cell_type"].unique())
 unique_colors.sort()
 COLOR_DICT = dict(zip(unique_colors, COLORS_LIST[: len(unique_colors)]))
 COLOR_DICT["Unknown"] = COLORS_LIST[len(unique_colors)]
+
+# slide_plots = pipeline_instance.plotly_build_fullslide_plots(COLOR_DICT)
+# for slide_plot in slide_plots:
+#     slide_plots[slide_plot].write_html(f"{slide_plot}.html")
 
 NODE_FEATURES = [
     "cell_type",
@@ -161,8 +164,8 @@ def main():
     ]
 
     # Create a multiprocessing Pool and execute the function in parallel
-    with multiprocessing.Pool(processes=NO_JOBS) as pool:
-        pool.starmap(parallel_function, func_args)
+    # with multiprocessing.Pool(processes=NO_JOBS) as pool:
+    #     pool.starmap(parallel_function, func_args)
 
 
 if __name__ == "__main__":

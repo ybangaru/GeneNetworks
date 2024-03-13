@@ -10,12 +10,12 @@
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=2
 #SBATCH --mem-per-cpu=100G
-#SBATCH --time=0-2:00
+#SBATCH --time=14-0:00:00
 #SBATCH --job-name=ml-flow-dashboard
 #SBATCH --output=logs/mlflow-%J.log
-#SBATCH --nodelist=compute-node003
+#SBATCH --nodelist=compute-node006
 
 echo "------------------------------------------------------------"
 echo "SLURM JOB ID: $SLURM_JOBID"
@@ -39,8 +39,14 @@ cd "$PROJECT_DIR" || { echo "Error: Unable to change directory to $project_direc
 
 # Load environment modules
 # Note: You may need to modify this based on your cluster setup
-module load python/3.8.18
-source .venv/bin/activate || { echo "Error: Failed to activate virtual environment";}
+# module load python/3.8.18
+# source .venv/bin/activate || { echo "Error: Failed to activate virtual environment";}
+export CONDA_ROOT=/data/qd452774/miniconda3
+source $CONDA_ROOT/etc/profile.d/conda.sh
+export PATH="$CONDA_ROOT/bin:$PATH"
+# Now you can activate your configured conda environments
+# source .venv/bin/activate
+conda activate jupyterlab
 
 # setting random ports
 TUNNELPORT=`shuf -i 8501-9000 -n 1`

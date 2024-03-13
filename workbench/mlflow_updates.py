@@ -2,7 +2,7 @@
 import os
 import pandas as pd
 import mlflow
-from helpers import MLFLOW_CLIENT, logger
+from graphxl import MLFLOW_CLIENT, logger
 
 
 def update_19_02_2024():

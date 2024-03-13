@@ -594,6 +594,31 @@ class spatialPipeline:
 
         return G
 
+    def plotly_build_fullslide_plots(self, COLOR_DICT, with_legend=True):
+        
+        slide_names = list(self.data.obs['sample'].unique())
+        plots_ = {}
+
+        import plotly.express as px
+        for slide_name in slide_names:
+            temp_df = self.data.obs[self.data.obs['sample'] == slide_name][["cell_type"]]
+            temp_df[["X", "Y"]] = self.data.obsm["spatial"][self.data.obs['sample'] == slide_name]
+            temp_df["color"] = self.data.obs["cell_type"].map(COLOR_DICT)
+            temp_fig = px.scatter(temp_df, x="X", y="Y", color="cell_type", color_discrete_map=COLOR_DICT, category_orders={"cell_type": list(COLOR_DICT.keys())}, hover_data=["cell_type"])
+
+            if not with_legend:
+                temp_fig.update_layout(showlegend=False)
+            else:
+                temp_fig.update_layout(
+                    legend=dict(
+                        itemsizing="constant",
+                        title_font_family="Courier New",
+                    ),
+                )
+            plots_[slide_name] = temp_fig
+
+        return plots_
+
 
 class spatialPreProcessor:
     def __init__(self, options):
