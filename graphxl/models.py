@@ -232,6 +232,7 @@ class GNN(torch.nn.Module):
         drop_ratio=0,
         gnn_type="gin",
         edge_type_dict=None,
+        normalization_type="batch",
     ):
         super(GNN, self).__init__()
         self.num_layer = num_layer
@@ -274,9 +275,16 @@ class GNN(torch.nn.Module):
                     )
                 )
 
-        self.batch_norms = torch.nn.ModuleList()
+        self.normalization = normalization_type
+        self.normalizations = torch.nn.ModuleList()
+
         for layer in range(num_layer):
-            self.batch_norms.append(torch.nn.BatchNorm1d(emb_dim_edge))
+            if self.normalization == "layer" or self.normalization == "feature":
+                self.normalizations.append(torch.nn.LayerNorm(emb_dim_edge))
+            elif self.normalization == "instance" or self.normalization == "sample":
+                self.normalizations.append(torch.nn.InstanceNorm1d(emb_dim_edge))
+            elif self.normalization == "batch":
+                self.normalizations.append(torch.nn.BatchNorm1d(emb_dim_edge))
 
     def forward(self, *argv):
         if len(argv) == 3:
@@ -305,7 +313,7 @@ class GNN(torch.nn.Module):
         h_list = [x]
         for layer in range(self.num_layer):
             h = self.gnns[layer](h_list[layer], edge_index, edge_attr, self.no_edge_types)
-            h = self.batch_norms[layer](h)
+            h = self.normalizations[layer](h)
             if layer == self.num_layer - 1:
                 # remove relu for the last layer
                 h = F.dropout(h, self.drop_ratio, training=self.training)

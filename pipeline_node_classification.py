@@ -43,8 +43,6 @@ def train_node_classification(dataset_kwargs):
             )
         )
 
-    # TODO: handle edge features mask
-
     dataset.set_transforms(transformers)
 
     model_kwargs = {
@@ -141,12 +139,8 @@ def build_train_kwargs(network_type, graph_type, kwargs):
 
     SUBGRAPH_SIZE = 3
     SUBGRAPH_RADIUS_LIMIT = 184
-    # NEIGHBORHOOD_SIZE = 15  # 15 * SUBGRAPH_SIZE
     NODE_EMBEDDING_SIZE = 130
     EDGE_EMBEDDING_SIZE = 130
-
-    # TODO: test feature/layer normalization instead of batch normalization for training as shape features
-    # features are resulting in overfitting and poor generalization
 
     NODE_FEATURES = [
         "cell_type",
@@ -166,8 +160,8 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         # "wswo_orientation",
         "voronoi_polygon" if "voronoi" in network_type else "boundary_polygon",
     ]
-    NODE_FEATURES_MASK = ["center_coord"]
-    CENTER_NODE_FEATURES_MASK = ["center_coord"]
+    NODE_FEATURES_MASK = ["center_coord", "biomarker_expression"]
+    CENTER_NODE_FEATURES_MASK = ["center_coord", "biomarker_expression"]
     EDGE_FEATURES = ["edge_type", "distance"]  # edge_type must be first variable (cell pair) features "edge_type",
     EDGE_FEATURES_MASK = None
     EDGE_TYPES = {
@@ -205,6 +199,7 @@ def build_train_kwargs(network_type, graph_type, kwargs):
         # "unassigned_cell_type": "Unknown",
     }
 
+    # NEIGHBORHOOD_SIZE = 15 * SUBGRAPH_SIZE
     feature_kwargs = {
         # "biomarker_expression_process_method": "linear",
         # "biomarker_expression_lower_bound": 0,
@@ -226,7 +221,7 @@ def main():
     GRAPH_FOLDER_NAME = "graph_self_edges"
 
     SEGMENTS_PER_DIMENSION = 20
-    chosen_network = "voronoi_delaunay"  # "given_delaunay", "given_r3index", "given_mst"
+    chosen_network = "given_delaunay"  # "voronoi_delaunay", "given_r3index", "given_mst"
     graph_type = "gin"  # "gcn", "graphsage", "gat"
     network_type = f"{chosen_network}_{SEGMENTS_PER_DIMENSION}"
 
