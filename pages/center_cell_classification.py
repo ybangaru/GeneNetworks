@@ -1,10 +1,17 @@
 import dash
-
+import plotly.express as px
+from helpers import MLFLOW_CLIENT
 dash.register_page(__name__, path='/center-cell-classification', order=5)
 
 
-def layout(velocity=None, **other_unknown_query_strings):
-    return dash.html.Div([
-        dash.dcc.Input(id='velocity', value=velocity)
-    ])
+def layout():
 
+    # TODO: add a dropdown for run id
+    return dash.html.Div(
+        [
+            dash.dcc.Dropdown(
+                id="run-id-choice",
+                placeholder="Select run id"
+            ),
+        ]
+    )

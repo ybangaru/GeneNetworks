@@ -5,27 +5,27 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 import tempfile
-import helpers as helpers
-from helpers.graph_build import (
+import graphxl as helpers
+from graphxl.graph_build import (
     construct_graph_for_region,
     calcualte_voronoi_from_coords,
     build_graph_from_voronoi_polygons,
 )
-from helpers.transform import (
+from graphxl.transform import (
     FeatureMask,
     AddCenterCellBiomarkerExpression,
     AddCenterCellType,
     AddCenterCellIdentifier,
     AddGraphLabel,
 )
-from helpers.embeddings_analysis import (
+from graphxl.embeddings_analysis import (
     get_random_sampled_subgraphs,
     get_embedding,
     dimensionality_reduction_combo,
     collect_cluster_label_for_all_nodes,
 )
 
-from helpers.data import CellularGraphDataset, SubgraphSampler
+from graphxl.data import CellularGraphDataset, SubgraphSampler
 
 
 def simulate_data(n_cells=1000):

@@ -242,6 +242,7 @@ class CellularGraphDataset(Dataset):
 
         from joblib import Parallel, delayed
         from graphxl import NO_JOBS
+        from graphxl import NO_JOBS
 
         def run_parallel_processing(files_names):
             Parallel(n_jobs=NO_JOBS, backend="loky")(delayed(save_file)(f) for f in files_names)
@@ -424,6 +425,11 @@ class CellularGraphDataset(Dataset):
         for j, g in enumerate(subgraphs):
             self.cached_data[(idx, j)] = g
         return self.cached_data[(idx, center_ind)]
+
+    def _get_possible_center_inds(self, idx):
+        """Get all possible center indices for subgraph sampling"""
+        data = self.get_full(idx)
+        return torch.where(data["is_padding"] == False)[0].numpy()  # noqa: E712
 
     def pick_center(self, data):
         """Randomly pick a center cell from a full cellular graph, cell type balanced"""

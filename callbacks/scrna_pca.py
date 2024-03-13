@@ -3,7 +3,6 @@ import pandas as pd
 from dash import Input, Output, State, callback
 from .plots_parallel import generate_plots
 from helpers import BoundaryDataLoader, plotly_spatial_scatter_numerical, SLICE_PIXELS_EDGE_CUTOFF, plotly_pca_categorical, plotly_pca_numerical
-from spacegm import build_graph_from_cell_coords, assign_attributes
 from .ann_data_store import ann_data, categorical_columns, numerical_columns
 
 @callback(
@@ -62,7 +61,7 @@ def load_plots(n_clicks, liverslice, color_choice):
     # ).reset_index()
     # slice_cell_data = slice_cell_data.rename(columns={"index": "CELL_ID"})
     # slice_cell_data["CELL_TYPE"] = ann_data.obs['CELL_TYPE'][slice_mask].to_list()
-    # slice_cell_data['SIZE'] = ann_data.obs['volume'][slice_mask].to_list()
+    # slice_cell_data['volume'] = ann_data.obs['volume'][slice_mask].to_list()
     # bm_columns = [f"BM-{bm_temp}" for bm_temp in ann_data.var.index.to_list()]
     # slice_cell_data[bm_columns] = pd.DataFrame(ann_data[slice_cell_data['CELL_ID'], :].X.toarray())
 

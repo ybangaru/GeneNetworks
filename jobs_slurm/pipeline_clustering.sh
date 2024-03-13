@@ -16,7 +16,7 @@
 #SBATCH --time=14-0:00:00
 #SBATCH --job-name=pipeline-clustering
 #SBATCH --output=logs/pipeline_clustering-%J.log
-#SBATCH --nodelist=compute-node001
+#SBATCH --nodelist=compute-node006
 
 echo "------------------------------------------------------------"
 echo "SLURM JOB ID: $SLURM_JOBID"

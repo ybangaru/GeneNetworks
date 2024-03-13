@@ -3,7 +3,7 @@ import ast
 from joblib import Parallel, delayed
 import mlflow
 import squidpy as sq
-from graphxl import spatialPipeline, spatialPreProcessor, logger, VisualizePipeline, NO_JOBS
+from graphxl import spatialPipeline, spatialPreProcessor, logger, VisualizePipeline, NO_JOBS, DATA_DIR, MLFLOW_CLIENT, MLFLOW_TRACKING_URI
 
 
 def run_parallel_spatial(filters_list):
@@ -130,7 +130,7 @@ def build_visualizations_for_run(filters):
     plots_instance.generate_pca_plots()
     plots_instance.generate_umap_plots()
 
-    directory_run = f"/data/qd452774/spatial_transcriptomics/data/{experiment_id}/{run_id}"
+    directory_run = f"{DATA_DIR}/{experiment_id}/{run_id}"
 
     os.makedirs(directory_run, exist_ok=True)
     os.makedirs(f"{directory_run}/PCA", exist_ok=True)
@@ -288,23 +288,20 @@ filters_list = [
 #     }
 # )
 
-mlflow.set_tracking_uri("/data/qd452774/spatial_transcriptomics/mlruns/")
-client = mlflow.tracking.MlflowClient()
-
 experiments_config = []
 
 for experiment_config in filters_list:
     my_experiment = f"spatial_clustering_{experiment_config['data_filter_name']}"
-    my_experiment_id = client.get_experiment_by_name(my_experiment).experiment_id
+    my_experiment_id = MLFLOW_CLIENT.get_experiment_by_name(my_experiment).experiment_id
 
-    my_runs = client.search_runs(experiment_ids=[my_experiment_id])
+    my_runs = MLFLOW_CLIENT.search_runs(experiment_ids=[my_experiment_id])
 
     for each_run in my_runs:
         if (
             "leiden-0.7" in each_run.info.run_name
         ):  # or 'leiden-1.0' in each_run.info.run_name or 'leiden-1.1' in each_run.info.run_name:
             try:
-                artifact_location_base = f"/data/qd452774/spatial_transcriptomics/mlruns/{my_experiment_id}/{each_run.info.run_uuid}/artifacts"
+                artifact_location_base = f"{MLFLOW_TRACKING_URI}{my_experiment_id}/{each_run.info.run_uuid}/artifacts"
 
                 if each_run.data.tags["state"] == "disease-state":
                     my_filename = (

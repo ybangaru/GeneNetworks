@@ -7,7 +7,6 @@ import plotly.express as px
 def build_comparison_heatmap(
     x_data, y_data, x_data_filter_name, y_data_filter_name, x_resolution, y_resolution, transformation=None
 ):
-
     # Convert the Series to DataFrames
     x_data_df = pd.DataFrame({"x_category": x_data.obs.leiden_res})
     y_data_df = pd.DataFrame({"y_category": y_data.obs.leiden_res})
@@ -71,10 +70,6 @@ def build_comparison_heatmap(
         xaxis=dict(side="top"),
         width=800,
         height=800,
-        # margin=dict(
-        #     # t=10,  # Adjust this value to control the margin at the top
-        #     # b=50,   # You can also adjust the margin at the bottom if needed
-        # ),
     )
 
     return fig
@@ -86,7 +81,6 @@ def run_parallel_comparison(combinations):
 
 
 def build_cluster_comparison(info_tuple):
-
     y_data_filter_name = info_tuple[0]
     y_resolution = info_tuple[1]
     x_data_filter_name = info_tuple[2]

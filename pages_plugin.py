@@ -9,7 +9,7 @@ from os import listdir
 from os.path import isfile, join
 from textwrap import dedent
 from urllib.parse import parse_qs
-
+from loguru import logger
 
 if not os.path.exists('pages'):
     raise Exception('A folder called `pages` does not exist.')
@@ -196,7 +196,6 @@ def register_page(
     dash.page_registry = OrderedDict([
         (p['module'], p) for p in page_registry_list
     ])
- 
 
 
 dash.register_page = register_page

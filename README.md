@@ -1,4 +1,31 @@
 <!-- Needs changes -->
+
+![screenshot](docs/slides/Slide2.jpg)
+![screenshot](docs/slides/Slide3.jpg)
+![screenshot](docs/slides/Slide4.jpg)
+![screenshot](docs/slides/Slide5.jpg)
+![screenshot](docs/slides/Slide6.jpg)
+![screenshot](docs/slides/Slide7.jpg)
+![screenshot](docs/slides/Slide8.jpg)
+![screenshot](docs/slides/Slide9.jpg)
+![screenshot](docs/slides/Slide10.jpg)
+![screenshot](docs/slides/Slide11.jpg)
+![screenshot](docs/slides/Slide12.jpg)
+![screenshot](docs/slides/Slide13.jpg)
+![screenshot](docs/slides/Slide14.jpg)
+![screenshot](docs/slides/Slide15.jpg)
+![screenshot](docs/slides/Slide16.jpg)
+![screenshot](docs/slides/Slide17.jpg)
+![screenshot](docs/slides/Slide18.jpg)
+![screenshot](docs/slides/Slide19.jpg)
+![screenshot](docs/slides/Slide20.jpg)
+![screenshot](docs/slides/Slide21.jpg)
+![screenshot](docs/slides/Slide22.jpg)
+![screenshot](docs/slides/Slide23.jpg)
+![screenshot](docs/slides/Slide24.jpg)
+
+
+
 Python env setup
 load python 3.8 module
 in SLURM - module load python/3.8.18 (verify the version using "module avail" command)

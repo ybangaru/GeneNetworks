@@ -45,6 +45,10 @@ def train_node_classification(dataset_kwargs):
 
     dataset.set_transforms(transformers)
 
+    # check edge case?? all-types vs cc-types
+    test_fig = dataset.plotly_subgraph(100, 327)
+    test_fig.write_html("test_fig.html")
+
     model_kwargs = {
         "num_layer": dataset.subgraph_size,  # same number of layers as number of hops in the subgraphs
         # +1 needed to assign the Unknown type during cell type masking transformation
@@ -218,6 +222,8 @@ def main():
     CLUSTERING_EXP_ID = "834659805990264659"
     CLUSTERING_RUN_ID = "c750f81070fa4ccbbd731b92746bebc6"
     UNIQUE_IDENTIFIER = "subcluster-finetune"
+    # GRAPH_FOLDER_NAME needs to be changed when node/edge features are changed in the classification model
+    # configuration because processed torch_geometric data changes with the features
     GRAPH_FOLDER_NAME = "graph_self_edges"
 
     SEGMENTS_PER_DIMENSION = 20

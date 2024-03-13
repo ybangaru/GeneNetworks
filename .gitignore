@@ -6,6 +6,7 @@ assets/
 extensions_vsix/
 
 docs/build/
+docs/_build/
 
 panel_app.py
 styles.css
