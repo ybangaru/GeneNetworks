@@ -33,6 +33,123 @@ from .utils import (
 )
 
 
+class GraphCommunityDataset(Dataset):
+    """Main dataset structure for graph communities detection tasks"""
+
+    def __init__(
+        self,
+        dataset_root,
+        transform=None,
+        pre_transform=None,
+        raw_folder_name="torch_files",
+        processed_folder_name="torch_files_processed",
+        **kwargs,
+    ):
+        self.root = dataset_root
+        self.raw_folder_name = raw_folder_name
+        self.processed_folder_name = processed_folder_name
+
+        if not os.path.exists(self.processed_dir):
+            os.makedirs(self.processed_dir, exist_ok=True)
+
+        super(GraphCommunityDataset, self).__init__(dataset_root, None, pre_transform)
+        self.transform = transform
+        self.cached_data = {}
+        self.processed_paths.sort()
+        self.N = len(self.processed_paths)
+        self.region_ids = [self.get_full(i).region_id for i in range(self.N)]
+
+        # self.data, self.slices = torch.load(self.processed_paths[0])
+
+    @property
+    def raw_dir(self) -> str:
+        return os.path.join(self.root, self.raw_folder_name)
+
+    @property
+    def processed_dir(self) -> str:
+        return os.path.join(self.root, self.processed_folder_name)
+
+    @property
+    def raw_file_names(self):
+        return sorted([f for f in os.listdir(self.raw_dir) if f.endswith(".gpt")])
+
+    @property
+    def processed_file_names(self):
+        return sorted([f for f in os.listdir(self.processed_dir) if f.endswith(".gpt")])
+
+    def download(self):
+        pass
+
+    def process(self):
+        """Featurize all cellular graphs"""
+
+        logger.info("Starting processing of %d graphs" % len(self.raw_file_names))
+
+        from joblib import Parallel, delayed
+        from graphxl import NO_JOBS
+
+        def run_parallel_processing(files_names):
+            Parallel(n_jobs=NO_JOBS, backend="loky")(delayed(save_file)(f) for f in files_names)
+
+        def save_file(raw_path):
+            d = torch.load(raw_path)
+            if self.pre_transform is not None:
+                for transform_fn in self.pre_transform:
+                    d = transform_fn(d)
+
+            torch.save(
+                d,
+                os.path.join(self.processed_dir, "%s.gpt" % (d.region_id)),
+            )
+
+        all_raw_torch_files = [os.path.join(self.raw_dir, file_item) for file_item in self.raw_file_names]
+        run_parallel_processing(all_raw_torch_files)
+        logger.info("Done processing of %d graphs" % len(self.raw_file_names))
+
+    def len(self):
+        return self.N
+
+    def __getitem__(self, i):
+        """Sample a graphfrom the dataset and apply transformations"""
+        idx = self._map_to_idx(i, insubset=True)
+        data = self.get(idx)
+        # Apply transformations
+        for transform_fn in self.transform:
+            data = transform_fn(data)
+        return data
+
+    def get(self, idx):
+        data = self.get_full(idx)
+        return data
+
+    def set_transforms(self, transform=[]):
+        """Set transformation functions"""
+        self.transform = transform
+
+    def _map_to_idx(self, i, insubset=False):
+        if isinstance(i, (int, np.integer)):
+            if not insubset:
+                assert 0 <= i < self.N, "Index %d out of range" % i
+                idx = i
+            else:
+                idx = self.indices()[i]
+        elif isinstance(i, str) and i in self.region_ids:
+            idx = self.region_ids.index(i)
+        else:
+            raise IndexError("Cannot parse index %s" % str(i))
+        return idx
+
+    def get_full(self, idx):
+        """Read the full torch cellular graph of region `idx`"""
+
+        if idx in self.cached_data:
+            return self.cached_data[idx]
+        else:
+            data = torch.load(self.processed_paths[idx])
+            self.cached_data[idx] = data
+            return data
+
+
 class CellularGraphDataset(Dataset):
     """Main dataset structure for cellular graphs
     Inherited from https://pytorch-geometric.readthedocs.io/en/latest/generated/torch_geometric.data.Dataset.html
@@ -241,7 +358,6 @@ class CellularGraphDataset(Dataset):
         """Featurize all cellular graphs"""
 
         from joblib import Parallel, delayed
-        from graphxl import NO_JOBS
         from graphxl import NO_JOBS
 
         def run_parallel_processing(files_names):

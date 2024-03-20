@@ -55,16 +55,18 @@ from .graph_build import (
     build_graph_from_voronoi_polygons,
     build_voronoi_polygon_to_cell_mapping,
     assign_attributes,
+    assign_one_hot_encoding,
     extract_boundary_features,
 )
 from .data import (
     CellularGraphDataset,
+    GraphCommunityDataset,
     SubgraphSampler,
     BoundaryDataLoader,
     get_biomarker_metadata,
     k_hop_subgraph,
 )
-from .models import GNN_pred, MLP_pred
+from .models import GNN_pred, MLP_pred, CommunityNet
 from .transform import (
     FeatureMask,
     AddCenterCellBiomarkerExpression,
@@ -76,5 +78,5 @@ from .inference import (
     collect_predict_by_random_sample,
     collect_predict_for_all_nodes,
 )
-from .train import train_subgraph
+from .train import train_subgraph, train_graph_community
 from .version import __version__
