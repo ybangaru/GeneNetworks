@@ -126,7 +126,7 @@ def read_run_attribute_classification(run_id=None, attribute_name=None):
     return literal_eval(xrun_info.data.params[attribute_name])
 
 
-def read_run_attribute_clustering(run_id=None, slides_name=None, resolution=None, attribute_name=None):
+def read_run_attribute_clustering(run_id=None, slides_name=None, resolution=None, attribute_name=None, **kwargs):
     if (run_id and slides_name) or (run_id and resolution):
         logger.info("Provided run_id and slides_name or resolution, using run_id directly")
 
@@ -141,7 +141,7 @@ def read_run_attribute_clustering(run_id=None, slides_name=None, resolution=None
     return literal_eval(xrun_info.data.params[attribute_name])
 
 
-def read_run_result_ann_data(run_id=None, slides_name=None, resolution=None):
+def read_run_result_ann_data(run_id=None, slides_name=None, resolution=None, **kwargs):
     if (run_id and slides_name) or (run_id and resolution):
         logger.info("Provided run_id and slides_name or resolution, using run_id directly")
 
