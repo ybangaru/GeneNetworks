@@ -78,5 +78,5 @@ from .inference import (
     collect_predict_by_random_sample,
     collect_predict_for_all_nodes,
 )
-from .train import train_subgraph, train_graph_community
+from .train import train_subgraph, train_graph_community_ensemble
 from .version import __version__

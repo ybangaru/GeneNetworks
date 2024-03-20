@@ -58,6 +58,8 @@ class GraphCommunityDataset(Dataset):
         self.processed_paths.sort()
         self.N = len(self.processed_paths)
         self.region_ids = [self.get_full(i).region_id for i in range(self.N)]
+        self.train_inds = None
+        self.valid_inds = None
 
         # self.data, self.slices = torch.load(self.processed_paths[0])
 
@@ -79,6 +81,10 @@ class GraphCommunityDataset(Dataset):
 
     def download(self):
         pass
+
+    def set_train_valid_inds(self, train_inds, valid_inds):
+        self.train_inds = train_inds
+        self.valid_inds = valid_inds
 
     def process(self):
         """Featurize all cellular graphs"""
