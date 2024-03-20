@@ -7,11 +7,166 @@ import os
 import numpy as np
 import torch
 import torch.optim
+from torch.utils.data import SubsetRandomSampler
+from torch_geometric.loader import DenseDataLoader
 import mlflow
+from .models import CommunityNet
 from .data import SubgraphSampler
 from .inference import collect_predict_for_all_nodes, collect_predict_by_random_sample
 from .mlflow_client_ import MLFLOW_TRACKING_URI
 from .logging_setup import logger
+
+
+def train_graph_community(model, dataset, device, lr, num_train_iterations=100, **kwargs):
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    model.to(device)
+
+    train_loader = DenseDataLoader(dataset, batch_size=1, sampler=SubsetRandomSampler(dataset.train_inds))
+    valid_loader = DenseDataLoader(dataset, batch_size=1, sampler=SubsetRandomSampler(dataset.valid_inds))
+
+    previous_loss = float("inf")  # Initialization.
+    model.train()
+
+    losses_list = []
+
+    for epoch in range(1, num_train_iterations + 1):  # Specify the number of epoch in each independent run.
+        loss_all = 0
+        for data in train_loader:
+            data = data.to(device)
+            optimizer.zero_grad()
+            out, mc_loss, o_loss, _, _ = model(data.x, data.adj, data.mask)
+            loss = mc_loss + o_loss
+            loss.backward()
+            loss_all += loss.item()
+            optimizer.step()
+
+        losses_list.append((epoch, loss_all))
+
+        if (
+            loss_all == 0 and loss_all == previous_loss
+        ):  # If two consecutive losses are both zeros, the learning gets stuck.
+            break  # stop the training.
+        else:
+            previous_loss = loss_all
+
+    return {
+        "model": model,
+        "losses_list": losses_list,
+        "train_loader": train_loader,
+        "valid_loader": valid_loader,
+        "dataset": dataset,
+    }
+
+
+def build_graph_community_model(dataset, emb_dim, num_tcn, **kwargs):
+    return CommunityNet(
+        in_channels=dataset.num_features,
+        out_channels=1,
+        hidden_channels=emb_dim,
+        num_clusters=num_tcn,
+    )
+
+
+def train_graph_community_ensemble(dataset, dataset_config, num_ensembles, loss_cutoff, **model_config):
+    logger.info("Starting training ensemble models...")
+
+    mlflow.set_experiment(dataset_config["experiment_name"])
+
+    with mlflow.start_run(run_name=dataset_config["run_name"]) as run:
+        directory_run_artifacts = f"{MLFLOW_TRACKING_URI}{run.info.experiment_id}/{run.info.run_id}/artifacts"
+
+        logger.info(f"Saving artifacts to {directory_run_artifacts}")
+
+        for item in [
+            "model_ensemble",
+            "train_results",
+            "valid_results",
+        ]:
+            if not os.path.exists(f"{directory_run_artifacts}/{item}"):
+                os.makedirs(f"{directory_run_artifacts}/{item}")
+
+        dataset_config["model_folder"] = f"{directory_run_artifacts}/model_ensemble"
+        dataset_config["train_results"] = f"{directory_run_artifacts}/train_results"
+        dataset_config["valid_results"] = f"{directory_run_artifacts}/valid_results"
+
+        for arg, value in dataset_config.items():
+            try:
+                if type(value) is np.ndarray or type(value) is list:
+                    value = ",".join(map(str, value))
+                mlflow.log_param(arg, value)
+            except Exception as e:
+                logger.error(f"Failed to log {arg} with value {value} due to {e}")
+
+        for arg, value in model_config.items():
+            try:
+                if type(value) is np.ndarray or type(value) is list:
+                    value = ",".join(map(str, value))
+                mlflow.log_param(arg, value)
+            except Exception as e:
+                logger.error(f"Failed to log {arg} with value {value} due to {e}")
+
+        mlflow.log_param("num_ensembles", num_ensembles)
+        mlflow.log_param("loss_cutoff", loss_cutoff)
+
+        curr_model_number = 1
+        while curr_model_number <= num_ensembles:
+            logger.info(f"Training started for model number {curr_model_number}")
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            model = build_graph_community_model(dataset, **model_config)
+            result_dict = train_graph_community(model, dataset, device, **model_config)
+
+            trained_model = result_dict["model"]
+            epoch_loss_list = result_dict["losses_list"]
+
+            train_loss_final = epoch_loss_list[-1][1]
+            logger.info(f"Final train loss for model_no {curr_model_number} is {train_loss_final:.4f}")
+            if train_loss_final >= loss_cutoff:
+                logger.info(f"Model {curr_model_number} did not converge. Restarting the training.")
+                continue
+
+            else:
+                logger.info(f" Training completed for model_no {curr_model_number}")
+                torch.save(trained_model.state_dict(), f"{dataset_config['model_folder']}/model_{curr_model_number}.pt")
+                trained_model.eval()
+
+                for item in ["train", "valid"]:
+                    os.makedirs(f"{dataset_config[f'{item}_results']}/model_{curr_model_number}", exist_ok=True)
+                    data_loader_ = result_dict[f"{item}_loader"]
+
+                    for data_instance in data_loader_:
+                        data_instance = data_instance.to(device)
+                        _, _, _, assignment_matrix, adj_matrix = trained_model(
+                            data_instance.x, data_instance.adj, data_instance.mask
+                        )
+
+                        region_id = data_instance.region_id[0]
+                        assignment_matrix = torch.softmax(assignment_matrix[0, :, :], -1)
+                        assignment_matrix = assignment_matrix.detach().cpu().numpy()
+                        adj_matrix = adj_matrix[0, :, :].detach().cpu().numpy()
+
+                        np.savetxt(
+                            f"{dataset_config[f'{item}_results']}/model_{curr_model_number}/{region_id}_adj_matrix.csv",
+                            adj_matrix,
+                            delimiter=",",
+                        )
+                        np.savetxt(
+                            f"{dataset_config[f'{item}_results']}/model_{curr_model_number}/{region_id}_node_mask.csv",
+                            np.array(data_instance.mask).T,
+                            delimiter=",",
+                            fmt="%i",
+                        )
+                        np.savetxt(
+                            f"{dataset_config[f'{item}_results']}/model_{curr_model_number}/{region_id}_assignment_matrix.csv",
+                            assignment_matrix,
+                            delimiter=",",
+                        )
+
+                for epoch_, loss_ in epoch_loss_list:
+                    mlflow.log_metric(f"train_loss_{curr_model_number}", loss_, step=epoch_)
+
+                curr_model_number += 1
+
+        logger.info("Training ensemble models finished")
 
 
 def train_subgraph(
