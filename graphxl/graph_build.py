@@ -351,6 +351,8 @@ def build_graph_from_cell_coords(cell_data, cell_boundaries, boundary_augments, 
     elif edge_logic == "knn":
         K = edge_config["n_neighbors"]
         x_y_coordinates = cell_data[["X", "Y"]].values
+        if K >= len(x_y_coordinates):
+            return None, None
         KNNgraph_sparse = kneighbors_graph(x_y_coordinates, K, mode="connectivity", include_self=False, n_jobs=NO_JOBS)
         KNNgraph_AdjMat = KNNgraph_sparse.toarray()
         KNNgraph_AdjMat_fix = KNNgraph_AdjMat + KNNgraph_AdjMat.T
