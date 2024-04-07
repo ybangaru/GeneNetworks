@@ -5,7 +5,7 @@ Provides variations of GNN models and loss functions used for node classificatio
 import numpy as np
 import torch
 from torch.utils.data import TensorDataset, DataLoader
-from torch_geometric.nn import MessagePassing
+from torch_geometric.nn import MessagePassing, dense_mincut_pool, DenseGraphConv
 from torch_geometric.utils import add_self_loops, softmax
 from torch_geometric.nn import (
     global_add_pool,
@@ -18,6 +18,23 @@ import torch.nn.functional as F
 from torch_scatter import scatter_add
 from torch_geometric.nn.inits import glorot, zeros
 from .logging_setup import logger
+
+
+class CommunityNet(torch.nn.Module):
+    def __init__(self, in_channels, out_channels, hidden_channels, num_clusters):
+        super(CommunityNet, self).__init__()
+
+        self.conv1 = DenseGraphConv(in_channels, hidden_channels)
+        self.pool1 = torch.nn.Linear(hidden_channels, num_clusters)
+
+    def forward(self, x, adj, mask=None):
+        x = F.relu(self.conv1(x.float(), adj, mask))
+        s = self.pool1(x)  # Here "s" is a non-softmax tensor.
+        x, adj, mc1, o1 = dense_mincut_pool(x, adj, s, mask)
+        ClusterAssignTensor_1 = s
+        ClusterAdjTensor_1 = adj
+
+        return F.log_softmax(x, dim=-1), mc1, o1, ClusterAssignTensor_1, ClusterAdjTensor_1
 
 
 class GINConv(MessagePassing):

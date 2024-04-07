@@ -5,6 +5,7 @@ import os
 import math
 import numpy as np
 import pandas as pd
+import torch
 import json
 import pickle
 import matplotlib
@@ -14,10 +15,14 @@ import networkx as nx
 import warnings
 from scipy.spatial import Delaunay
 from scipy.spatial.distance import cdist
+from sklearn.neighbors import kneighbors_graph
 from shapely.geometry import Polygon, Point
+from torch_geometric.data import Data
 import geopandas as gpd
 from rtree import index
 import cv2
+
+from .local_config import NO_JOBS
 
 
 def plot_voronoi_polygons(voronoi_polygons, voronoi_polygon_colors=None):
@@ -343,6 +348,24 @@ def build_graph_from_cell_coords(cell_data, cell_boundaries, boundary_augments, 
         # Compute the minimum spanning tree
         G = nx.minimum_spanning_tree(G)
 
+    elif edge_logic == "knn":
+        K = edge_config["n_neighbors"]
+        x_y_coordinates = cell_data[["X", "Y"]].values
+        if K >= len(x_y_coordinates):
+            return None, None
+        KNNgraph_sparse = kneighbors_graph(x_y_coordinates, K, mode="connectivity", include_self=False, n_jobs=NO_JOBS)
+        KNNgraph_AdjMat = KNNgraph_sparse.toarray()
+        KNNgraph_AdjMat_fix = KNNgraph_AdjMat + KNNgraph_AdjMat.T
+        KNNgraph_EdgeIndex = np.argwhere(KNNgraph_AdjMat_fix > 0)
+
+        for i, row in enumerate(coord_ar):
+            G.add_node(i, **{boundary_augments: cell_boundaries[i]})
+            node_to_cell_mapping[i] = row[0]
+
+        for index_ in range(KNNgraph_EdgeIndex.shape[0]):
+            i, j = KNNgraph_EdgeIndex[index_]
+            G.add_edge(i, j)
+
     return G, node_to_cell_mapping
 
 
@@ -531,6 +554,24 @@ def extract_boundary_features(boundary_coords):
     # features = np.concatenate((hu_moments, zernike_moments, fourier_desc, poly_approx_dist))
 
     return hu_moments
+
+
+def assign_one_hot_encoding(G, cell_data, cell_types_list, node_to_cell_mapping):
+    """Assign one-hot encoding to node attributes and torch edges to create torch graph data object"""
+
+    # Create a dictionary to map cell types to one-hot encoding
+    cell_type_to_one_hot = {cell_type: np.eye(len(cell_types_list))[i] for i, cell_type in enumerate(cell_types_list)}
+
+    node_info = pd.DataFrame({"indices": node_to_cell_mapping.keys(), "cell_ids": node_to_cell_mapping.values()})
+    node_info = node_info.merge(cell_data, left_on="cell_ids", right_on="CELL_ID")
+
+    node_info["one_hot"] = node_info["CELL_TYPE"].apply(lambda x: cell_type_to_one_hot[x])
+    node_info = node_info.sort_values(by="indices")
+    # reshape the one-hot encoding to be a 2D tensor
+    node_attr_matrix = torch.tensor(np.stack(node_info["one_hot"].values, 0))
+    edge_indices = torch.from_numpy(np.array(G.edges)).t().contiguous()
+
+    return Data(x=node_attr_matrix, edge_index=edge_indices)
 
 
 def assign_attributes(

@@ -21,6 +21,7 @@ from .graph_build import (
     calcualte_voronoi_from_coords,
     build_graph_from_cell_coords,
     assign_attributes,
+    assign_one_hot_encoding,
     get_edge_type,
 )
 from .mlflow_client_ import read_run_result_ann_data, read_run_attribute_clustering, MLFLOW_TRACKING_URI, MLFLOW_CLIENT
@@ -244,9 +245,13 @@ class spatialPipeline:
         with open(f"{nx_graph_root}/color_dict.json", "w") as f:
             json.dump(color_dict, f)
 
-    def build_networkx_for_region(self, segment_config, pretransform_networkx_config, network_features_config):
+    def build_networkx_for_region(
+        self, segment_config, pretransform_networkx_config, network_features_config, convert_to_torch=False
+    ):
         segment_boundaries_given = self.read_boundary_arrays(segment_config)
         if not segment_boundaries_given:
+            logger.info(segment_config)
+            logger.info("No cells in this segment")
             return None
         segment_data, segment_centroids = self._get_cell_centroids_df(segment_boundaries_given)
         segment_boundaries = [segment_boundaries_given[item][0] for item in segment_data["CELL_ID"].values]
@@ -269,6 +274,9 @@ class spatialPipeline:
                 edge_config=pretransform_networkx_config["edge_config"],
             )
 
+        if not G_segment:
+            return None
+
         padding_info = segment_config.get("padding", None)
         if padding_info is not None:
             padding_dict = self.segment_instances[
@@ -286,14 +294,21 @@ class spatialPipeline:
             if all(padding_dict.values()) == True:  # noqa
                 return None
 
-        G_segment = assign_attributes(
-            G_segment,
-            segment_data,
-            segment_boundaries_given,
-            node_to_cell_mapping,
-            segment_config["neighbor_edge_cutoff"],
-            padding_dict,
-        )
+        if not network_features_config["node_features"] == ["one-hot-encoding"]:
+            G_segment = assign_attributes(
+                G_segment,
+                segment_data,
+                segment_boundaries_given,
+                node_to_cell_mapping,
+                segment_config["neighbor_edge_cutoff"],
+                padding_dict,
+            )
+        else:
+            cell_types_list = list(self.data.obs["cell_type"].unique())
+            cell_types_list.sort()
+            if not convert_to_torch:
+                logger.error("Networkx version for one-hot-encoding is not implemented yet")
+            G_segment = assign_one_hot_encoding(G_segment, segment_data, cell_types_list, node_to_cell_mapping)
 
         slice_region_id = (
             f"{segment_config['sample_name']}-{segment_config['region_id'][0]}-{segment_config['region_id'][1]}"
@@ -595,16 +610,24 @@ class spatialPipeline:
         return G
 
     def plotly_build_fullslide_plots(self, COLOR_DICT, with_legend=True):
-        
-        slide_names = list(self.data.obs['sample'].unique())
+        slide_names = list(self.data.obs["sample"].unique())
         plots_ = {}
 
         import plotly.express as px
+
         for slide_name in slide_names:
-            temp_df = self.data.obs[self.data.obs['sample'] == slide_name][["cell_type"]]
-            temp_df[["X", "Y"]] = self.data.obsm["spatial"][self.data.obs['sample'] == slide_name]
+            temp_df = self.data.obs[self.data.obs["sample"] == slide_name][["cell_type"]]
+            temp_df[["X", "Y"]] = self.data.obsm["spatial"][self.data.obs["sample"] == slide_name]
             temp_df["color"] = self.data.obs["cell_type"].map(COLOR_DICT)
-            temp_fig = px.scatter(temp_df, x="X", y="Y", color="cell_type", color_discrete_map=COLOR_DICT, category_orders={"cell_type": list(COLOR_DICT.keys())}, hover_data=["cell_type"])
+            temp_fig = px.scatter(
+                temp_df,
+                x="X",
+                y="Y",
+                color="cell_type",
+                color_discrete_map=COLOR_DICT,
+                category_orders={"cell_type": list(COLOR_DICT.keys())},
+                hover_data=["cell_type"],
+            )
 
             if not with_legend:
                 temp_fig.update_layout(showlegend=False)
