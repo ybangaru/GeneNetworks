@@ -19,7 +19,7 @@
 #SBATCH --time=7-0:00:00
 #SBATCH --job-name=graphxl
 #SBATCH --output=logs/code-server-%J.log
-#SBATCH --nodelist=compute-node001
+#SBATCH --nodelist=compute-node002
 
 # Print SLURM job information
 echo "------------------------------------------------------------"
