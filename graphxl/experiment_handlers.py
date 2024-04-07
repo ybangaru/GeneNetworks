@@ -274,6 +274,9 @@ class spatialPipeline:
                 edge_config=pretransform_networkx_config["edge_config"],
             )
 
+        if not G_segment:
+            return None
+
         padding_info = segment_config.get("padding", None)
         if padding_info is not None:
             padding_dict = self.segment_instances[
