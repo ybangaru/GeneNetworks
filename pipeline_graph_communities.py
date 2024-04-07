@@ -94,9 +94,6 @@ def build_graph_segment_config(pipeline_instance, color_dict, segments_per_dim):
         "edge_features": None,
     }
 
-    # TODO: Remove this line after testing
-    all_slices_names_grid = all_slices_names_grid[50:60]
-
     return {
         "pretransform_networkx_config": pretransform_networkx_config,
         "network_features_config": network_features_config,
@@ -110,6 +107,8 @@ def build_torch_dataset(
     pipeline_instance,
     pretransform_networkx_config,
     network_features_config,
+    save_files=True,
+    max_nodes_per_segment=None,
     **kwargs,
 ):
     clustering_run_id = data_options["mlflow_config"]["run_id"]
@@ -125,7 +124,7 @@ def build_torch_dataset(
     dataset_kwargs.update(
         {
             "experiment_name": "graph_communities",
-            "run_name": "test_run",
+            "run_name": "baseline community model testing",
             "clustering_run_id": data_options["mlflow_config"]["run_id"],
             "dataset_filter": data_options["mlflow_config"]["data_filter_name"],
             "leiden_annotation_column": data_options["cell_type_column"],
@@ -141,15 +140,21 @@ def build_torch_dataset(
         }
     )
 
-    MAX_NODES_SEGMENT = -1
-    for segment_config in all_slides_names_grid:
-        torch_graph_temp = pipeline_instance.build_networkx_for_region(
-            segment_config, pretransform_networkx_config, network_features_config, convert_to_torch=True
-        )
-        if torch_graph_temp is not None:
-            MAX_NODES_SEGMENT = max(MAX_NODES_SEGMENT, torch_graph_temp.x.shape[0])
-            filename_tg = f"{RAW_TORCH_FOLDER_DIR}/{torch_graph_temp.region_id}.gpt"
-            torch.save(torch_graph_temp, filename_tg)
+    if save_files:
+        MAX_NODES_SEGMENT = -1
+        for segment_config in all_slides_names_grid:
+            torch_graph_temp = pipeline_instance.build_networkx_for_region(
+                segment_config, pretransform_networkx_config, network_features_config, convert_to_torch=True
+            )
+            if torch_graph_temp is not None:
+                MAX_NODES_SEGMENT = max(MAX_NODES_SEGMENT, torch_graph_temp.x.shape[0])
+                filename_tg = f"{RAW_TORCH_FOLDER_DIR}/{torch_graph_temp.region_id}.gpt"
+                torch.save(torch_graph_temp, filename_tg)
+        logger.info(f"Max nodes per segment: {MAX_NODES_SEGMENT}")
+    else:
+        if not max_nodes_per_segment:
+            raise ValueError("max_nodes_per_segment is required when save_files is False")
+        MAX_NODES_SEGMENT = max_nodes_per_segment
 
     dataset_kwargs.update(
         {
@@ -188,8 +193,8 @@ def build_torch_dataset(
 
 def build_graph_community_model_kwargs(dataset, color_dict, **kwargs):
     num_tcn = len(color_dict) - 1  # -1 for unknown
-    num_ensemble_models = 20  # for ensemble
-    num_training_iterations = 3000
+    num_ensemble_models = 10  # for ensemble
+    num_training_iterations = 100
     embedding_dimension = 128
     lr_train = 0.0001
     loss_cutoff = -0.06
@@ -205,11 +210,18 @@ def build_graph_community_model_kwargs(dataset, color_dict, **kwargs):
 
 
 def main():
+    save_files = False
+    max_nodes_per_segment = 1778  # required when save files is False
+
     base_data_config = build_base_data_config()
     base_pipeline_info = build_base_pipeline(**base_data_config)
     graph_segment_config = build_graph_segment_config(**base_pipeline_info)
     torch_dataset, dataset_config = build_torch_dataset(
-        **base_data_config, **graph_segment_config, **base_pipeline_info
+        **base_data_config,
+        **graph_segment_config,
+        **base_pipeline_info,
+        save_files=save_files,
+        max_nodes_per_segment=max_nodes_per_segment,
     )
     model_config = build_graph_community_model_kwargs(dataset=torch_dataset, **dataset_config, **base_pipeline_info)
     train_graph_community_ensemble(torch_dataset, dataset_config, **model_config)
@@ -276,11 +288,11 @@ def build_visualizations(exp_id, run_id):
 
 if __name__ == "__main__":
     # stage 1
-    main()
+    # main()
     # stage 2
-    # run_id = "5d4ee8af2d764058add8ac009842b2e0"
-    # exp_id = "548471598705222754"
-    # combine_ensemble_results(exp_id, run_id)
+    run_id = "c98854892d514a12a1ef24fab7b0f893"
+    exp_id = "548471598705222754"
+    combine_ensemble_results(exp_id, run_id)
     # stage 3
     # use R diceR to generate the final results
     # stage 4
