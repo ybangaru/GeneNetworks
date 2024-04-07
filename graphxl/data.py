@@ -52,7 +52,7 @@ class GraphCommunityDataset(Dataset):
         if not os.path.exists(self.processed_dir):
             os.makedirs(self.processed_dir, exist_ok=True)
 
-        super(GraphCommunityDataset, self).__init__(dataset_root, None, pre_transform)
+        super(GraphCommunityDataset, self).__init__(dataset_root, transform, pre_transform)
         self.transform = transform
         self.cached_data = {}
         self.processed_paths.sort()
