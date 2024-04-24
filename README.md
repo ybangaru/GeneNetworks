@@ -1,14 +1,16 @@
 # Spatial Transcriptomics Workbench
 
-
+## Network Workflow
 https://github.com/ybangaru/GeneNetworks/assets/45936015/ecce388c-6b2b-46ad-8255-6130a40436f3
 
+## MLFlow Tracking
+[<img src="https://img.youtube.com/vi/y-GrDT9Yrf4/maxresdefault.jpg" width="50%">](https://youtu.be/y-GrDT9Yrf4)
+
+## Node embeddings
 https://github.com/ybangaru/GeneNetworks/assets/45936015/4f889e30-8c33-4c3e-9991-b9a5b1c50bd4
 
+## Edge embeddings
 https://github.com/ybangaru/GeneNetworks/assets/45936015/53d881b3-c22e-4d85-98ab-ea5322ae2c1b
-
-
-
 
 
 <!-- Needs changes -->
